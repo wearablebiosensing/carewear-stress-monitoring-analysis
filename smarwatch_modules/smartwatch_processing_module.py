@@ -473,3 +473,33 @@ def plot_expected_recieved_samples(missing_samples_dict):
     return fig
     # Show plot
     # fig.show()
+def participant_based_fig(hr_df_pid,participant_folder):
+    print("participant_based_fig: ",participant_folder)
+    missing_samples_dict = get_expected_recieved_samples(hr_df_pid)
+    sample_rate_dict = get_activity_based_sr(hr_df_pid)
+    
+    fig1 = plot_expected_recieved_samples(missing_samples_dict)
+    fig2 = plot_sample_rate(sample_rate_dict,participant_folder)
+    
+    # Create a subplot layout with one row and two columns
+    combined_fig = make_subplots(rows=1, cols=2, subplot_titles=("Expected vs Received Samples", "Sample Rate"))
+
+    # Add traces from fig1 to the first subplot
+    for trace in fig1.data:
+        combined_fig.add_trace(trace, row=1, col=1)
+
+    # Add traces from fig2 to the second subplot
+    for trace in fig2.data:
+        combined_fig.add_trace(trace, row=1, col=2)
+
+    # Update layout for aesthetics
+    combined_fig.update_layout(
+        title="Participant-Based Analysis",
+        showlegend=True,
+        height=600,  # Adjust height as needed
+        width=1000,  # Adjust width as needed
+    )
+
+    # Return the combined figure
+    return combined_fig
+    
