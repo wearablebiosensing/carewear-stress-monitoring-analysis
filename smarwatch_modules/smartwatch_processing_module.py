@@ -570,7 +570,7 @@ def plot_hr_raw_data(df,pid):
     bike_legs_first_occurrence_index_df = (df['activity'] == 'Stationary_Bike_Legs').idxmax() #df[df['activity'] == 'Stationary_Bike_Legs'].index[0]
     print("bike_legs_first_occurrence_index_df: ",bike_legs_first_occurrence_index_df)
     print("stationary_bike_hand_first_occurrence_index_df: ",stationary_bike_hand_first_occurrence_index_df)
-    fig1 = px.line(df, y="heart_rate_float",line_shape="linear", color_discrete_sequence=['#0072BD'],template="plotly_white")
+    fig1 = px.line(df, y="HeartRate",line_shape="linear", color_discrete_sequence=['#0072BD'],template="plotly_white")
 
     fig1.add_vline(x=rest_1_first_occurrence_index_df,  annotation_text="Rest1", line_width=3, line_dash="solid", line_color="grey")
     fig1.add_vline(x=prepare_speech_first_occurrence_index_df, annotation_text="PS",line_width=3, line_dash="solid", line_color="grey")
