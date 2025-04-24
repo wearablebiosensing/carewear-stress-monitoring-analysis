@@ -12,6 +12,8 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
 # Path to the folder containing CSV files
 folder_path = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Concat_File/"  # Replace with your path
+merged_lables_folder = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/merged_lables"
+
 # Define the name to filter by
 filter_name = "heart"  # Replace with the desired keyword
 # Get list of CSV files containing the filter name
@@ -27,7 +29,6 @@ def extract_participant_id(file_name):
     match = re.search(r'_P(\d+)', file_name)
     return int(match.group(1)) if match else float('inf')  # Use inf for files without IDs
 
-merged_lables_folder = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/merged_lables"
 merge_lables_hr = [f for f in os.listdir(merged_lables_folder) if f.endswith('.csv') and filter_name in f]
 print("merge_lables_hr:",merge_lables_hr)
 
