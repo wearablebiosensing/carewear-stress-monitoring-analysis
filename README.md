@@ -1,4 +1,4 @@
-# carewear-stress-monitoring-analysis
+# CareWear Study Data Processing
 
 Pre requisite:
 -- Data access
