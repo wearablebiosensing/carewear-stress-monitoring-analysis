@@ -14,20 +14,18 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 # Hide the main tkinter window
 root = tk.Tk()
 root.withdraw()
-
 # Ask the user to pick the first folder
-folder1 = filedialog.askdirectory(title="Select the first folder")
-
+folder1 = filedialog.askdirectory(title="Select Concat_File folder")
 # Ask the user to pick the second folder
-folder2 = filedialog.askdirectory(title="Select the second folder")
+folder2 = filedialog.askdirectory(title="Select the merged_lables folder")
 
 # Print them to check
 print(f"First folder selected: {folder1}")
 print(f"Second folder selected: {folder2}")
 
 # Path to the folder containing CSV files
-folder_path = folder1 #"/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Concat_File/"  # Replace with your path
-merged_lables_folder = folder2 #"/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/merged_lables"
+folder_path = folder1 #"/DATASET/StudyData_Drive_2024/Concat_File/"  # Replace with your path
+merged_lables_folder = folder2 #"DATASET/StudyData_Drive_2024/merged_lables"
 
 # Define the name to filter by
 filter_name = "heart"  # Replace with the desired keyword
