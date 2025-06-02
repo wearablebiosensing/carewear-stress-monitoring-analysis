@@ -310,22 +310,19 @@ def create_activity_subplots(df,activity_col_name):
 def belt_subplots(df):
     # Initialize figure with subplots
     fig = make_subplots(
-        rows=2, 
-        cols=2, 
+        rows=4, 
+        cols=1, 
         subplot_titles=("Respiration1", "Respiration2", "Respiration3", "ECG")
     )
     # Add traces
     # # timestamp,Respiration1,Respiration2,Respiration3,ECG,activity,datetime_est
     fig.add_trace(go.Scatter(x=df.index, y=df["Respiration1"]), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df["Respiration2"]), row=1, col=2)
-    fig.add_trace(go.Scatter(x=df.index, y=df["Respiration3"]), row=2, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df["ECG"]), row=2, col=2)
+    fig.add_trace(go.Scatter(x=df.index, y=df["Respiration2"]), row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df["Respiration3"]), row=3, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df["ECG"]), row=4, col=1)
 
     # Update layout
-    fig.update_layout(height=700, width=1200, title_text="2x2 Subplots")
-
-    # Show the plot
-    # fig.show()
+    fig.update_layout(height=900, width=3000, title_text="Belt data plots")
     return fig
 
 

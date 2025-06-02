@@ -28,7 +28,7 @@ root_data_set= Path("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduat
 WRITE_FILE = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Concat_File"
 
 
-def write_concat_files(root_folder_str,root_data_set):
+def read_watch_data(root_folder_str,root_data_set):
     participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
     sorted_participants = sorted(participant_folders, key=lambda x: int(x[1:]))
     print("sorted_participants: ",sorted_participants)
@@ -88,6 +88,7 @@ def write_concat_files(root_folder_str,root_data_set):
                 combined_df_gyr.to_csv(WRITE_FOLDER + "gry_" + participant_folder + ".csv")
             except TypeError as e:
                 print("combined_df_sort: ")
+
 # Path to the main folder
 def read_bio_pac_data(main_folder_path):
     # List to store individual DataFrames
@@ -135,6 +136,7 @@ def read_bio_pac_data(main_folder_path):
 
     df_combined_concat = pd.concat(dfs)
     return  df_combined_concat
+
 # Path to the main folder
 def read_belt_data(main_folder_path):
     # List to store individual DataFrames.
@@ -183,49 +185,57 @@ def read_belt_data(main_folder_path):
     df_combined_concat = pd.concat(dfs)
     print("df_combined_concat: ",df_combined_concat["activity"].unique())
     return  df_combined_concat
-print("######################################## SMARTWATCH DATA ########################################")
+
+# Get start and end time from belt data
+# Input parameters: df_belt
+def getLables(df_belt):
+    # Convert the millisecond Unix timestamp to human-readable datetime in EST
+    df_combined_concat['datetime_est'] = pd.to_datetime(df_combined_concat['timestamp'], unit='ms')  # Convert to UTC datetime
+    df_combined_concat['datetime_est'] = df_combined_concat['datetime_est'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')  # Convert to EST timezone
+    # Group by activity and find start and end times
+    activity_times = df_combined_concat.groupby('activity')['datetime_est'].agg(['min', 'max']).reset_index()
+    activity_times.rename(columns={'min': 'start_time', 'max': 'end_time',"activity":"Belt_Activity_Labels"}, inplace=True)
+    return activity_times
+
+if __name__ == "__main__":
+
+    print("######################################## SMARTWATCH DATA ########################################")
 
 
-write_concat_files(root_folder_str,root_data_set)
+    read_watch_data(root_folder_str,root_data_set)
 
-participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
-print("######################################## BIOPAC DATA ########################################")
-print("participant_folders: ",participant_folders)
-for pid in participant_folders:
-    ## Check if participant ID has already been processed:
-    if os.path.exists(WRITE_FILE +"/"+ pid + "_belt.csv"): # eg: P22_belt.csv
-        print("File exists PARTICIPANT DATA already processed !! ======================")
-    else:
-        print("File does not exist")
-        print(" pid ================================================= ",pid)
-        main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/' + pid + '/BELT'
-        df_combined_concat = read_belt_data(main_folder_path)
-        print("df_combined_concat: ",df_combined_concat["activity"].unique())
-            # Get start and end time,
-        # Convert the millisecond Unix timestamp to human-readable datetime in EST
-        df_combined_concat['datetime_est'] = pd.to_datetime(df_combined_concat['timestamp'], unit='ms')  # Convert to UTC datetime
-        df_combined_concat['datetime_est'] = df_combined_concat['datetime_est'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')  # Convert to EST timezone
-        # Group by activity and find start and end times
-        activity_times = df_combined_concat.groupby('activity')['datetime_est'].agg(['min', 'max']).reset_index()
-        activity_times.rename(columns={'min': 'start_time', 'max': 'end_time'}, inplace=True)
-        # activity_times.to_csv("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Task_Time_Line_Belt/" + "belt_task_timeline_" + pid +".csv")
-        print("Filepath of the written file: ")
-        print(WRITE_FILE + "/BELT/" + pid + "_belt.csv")
-        df_combined_concat.to_csv(WRITE_FILE + "/" + pid + "_belt.csv")
-        print("df_combined_concat concat file written ===========================")
-        print(df_combined_concat.head())
+    participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
+    print("######################################## BIOPAC DATA ########################################")
+    print("participant_folders: ",participant_folders)
+    for pid in participant_folders:
+        ## Check if participant ID has already been processed:
+        if os.path.exists(WRITE_FILE +"/"+ pid + "_belt.csv"): # eg: P22_belt.csv
+            print("File exists PARTICIPANT DATA already processed !! ======================")
+        else:
+            print("File does not exist")
+            print(" pid ================================================= ",pid)
+            main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/' + pid + '/BELT'
+            df_combined_concat = read_belt_data(main_folder_path)
+            print("df_combined_concat: ",df_combined_concat["activity"].unique())
+            activity_times = getLables(df_combined_concat)
+            activity_times.to_csv("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Task_Time_Line_Belt/" + "belt_task_timeline_" + pid +".csv")
+            print("Filepath of the written file: ")
+            print(WRITE_FILE + "/BELT/" + pid + "_belt.csv")
+            df_combined_concat.to_csv(WRITE_FILE + "/" + pid + "_belt.csv")
+            print("df_combined_concat concat file written ===========================")
+            print(df_combined_concat.head())
 
 
-participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
-######################################## BIOPAC DATA ########################################
-print("######################################## BIOPAC DATA ########################################")
-for pid in participant_folders:
-    if os.path.exists(WRITE_FILE +"/"+ pid + "_biopac.csv"): # eg: P13_biopac.csv
-        print("File exists PARTICIPANT DATA already processed !! ======================")
-    else:
-        print(" pid ================================================= ",pid)
-        main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/' + pid + '/BIOPAC'
-        df_combined_concat = read_bio_pac_data(main_folder_path)
-        WRITE_FILE = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Concat_File"
+    participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
+    ######################################## BIOPAC DATA ########################################
+    print("######################################## BIOPAC DATA ########################################")
+    for pid in participant_folders:
+        if os.path.exists(WRITE_FILE +"/"+ pid + "_biopac.csv"): # eg: P13_biopac.csv
+            print("File exists PARTICIPANT DATA already processed !! ======================")
+        else:
+            print(" pid ================================================= ",pid)
+            main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/' + pid + '/BIOPAC'
+            df_combined_concat = read_bio_pac_data(main_folder_path)
+            WRITE_FILE = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Concat_File"
 
-        df_combined_concat.to_csv(WRITE_FILE + "/" + pid + "_biopac.csv")
+            df_combined_concat.to_csv(WRITE_FILE + "/" + pid + "_biopac.csv")
