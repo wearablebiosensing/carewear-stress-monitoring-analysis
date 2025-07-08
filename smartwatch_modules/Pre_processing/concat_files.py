@@ -23,9 +23,9 @@ import dqm
 # from smarwatch_modules.smartwatch_processing_module import *
 
 
-root_folder_str = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/"
-root_data_set= Path("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/")
-WRITE_FILE = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Concat_File"
+root_folder_str = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/"
+root_data_set= Path("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/")
+WRITE_FILE = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Concat_File"
 
 
 def read_watch_data(root_folder_str,root_data_set):
@@ -81,8 +81,8 @@ def read_watch_data(root_folder_str,root_data_set):
                 print("ValueError: ")
 
             try:
-                combined_df_sort = combined_df.sort_values(by="Timestamp_pd")
-                WRITE_FOLDER = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Concat_File/"
+                # combined_df_sort = combined_df.sort_values(by="Timestamp_pd")
+                WRITE_FOLDER = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Concat_File/"
                 combined_df.to_csv(WRITE_FOLDER + "heart_rate_" + participant_folder + ".csv")
                 combined_df_acc.to_csv(WRITE_FOLDER + "acc_" + participant_folder + ".csv")
                 combined_df_gyr.to_csv(WRITE_FOLDER + "gry_" + participant_folder + ".csv")
@@ -197,6 +197,10 @@ def getLables(df_belt):
     activity_times.rename(columns={'min': 'start_time', 'max': 'end_time',"activity":"Belt_Activity_Labels"}, inplace=True)
     return activity_times
 
+root_folder = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/2025-Test/CareWear_V2Test/V2/stress_protocol_minder/06-30-25"
+
+# read_watch_data(root_folder_str,root_data_set)
+
 if __name__ == "__main__":
 
     print("######################################## SMARTWATCH DATA ########################################")
@@ -214,11 +218,11 @@ if __name__ == "__main__":
         else:
             print("File does not exist")
             print(" pid ================================================= ",pid)
-            main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/' + pid + '/BELT'
+            main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/' + pid + '/BELT'
             df_combined_concat = read_belt_data(main_folder_path)
             print("df_combined_concat: ",df_combined_concat["activity"].unique())
             activity_times = getLables(df_combined_concat)
-            activity_times.to_csv("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Task_Time_Line_Belt/" + "belt_task_timeline_" + pid +".csv")
+            activity_times.to_csv("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Task_Time_Line_Belt/" + "belt_task_timeline_" + pid +".csv")
             print("Filepath of the written file: ")
             print(WRITE_FILE + "/BELT/" + pid + "_belt.csv")
             df_combined_concat.to_csv(WRITE_FILE + "/" + pid + "_belt.csv")
@@ -234,8 +238,8 @@ if __name__ == "__main__":
             print("File exists PARTICIPANT DATA already processed !! ======================")
         else:
             print(" pid ================================================= ",pid)
-            main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/' + pid + '/BIOPAC'
+            main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/' + pid + '/BIOPAC'
             df_combined_concat = read_bio_pac_data(main_folder_path)
-            WRITE_FILE = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Concat_File"
+            WRITE_FILE = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Concat_File"
 
             df_combined_concat.to_csv(WRITE_FILE + "/" + pid + "_biopac.csv")
