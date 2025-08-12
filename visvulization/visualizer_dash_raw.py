@@ -6,13 +6,26 @@ import plotly.graph_objects as go
 from datetime import datetime
 import re
 from plotly.subplots import make_subplots
+import tkinter as tk
+from tkinter import filedialog
 
 # Initialize the Dash app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
+# Hide the main tkinter window
+root = tk.Tk()
+root.withdraw()
+# Ask the user to pick the first folder
+folder1 = filedialog.askdirectory(title="Select Concat_File folder")
+# Ask the user to pick the second folder
+folder2 = filedialog.askdirectory(title="Select the merged_lables folder")
+
+# Print them to check
+print(f"First folder selected: {folder1}")
+print(f"Second folder selected: {folder2}")
 
 # Path to the folder containing CSV files
-folder_path = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/Concat_File/"  # Replace with your path
-merged_lables_folder = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024/merged_lables"
+folder_path = folder1 #"/DATASET/StudyData_Drive_2024/Concat_File/"  # Replace with your path
+merged_lables_folder = folder2 #"DATASET/StudyData_Drive_2024/merged_lables"
 
 # Define the name to filter by
 filter_name = "heart"  # Replace with the desired keyword
@@ -297,22 +310,19 @@ def create_activity_subplots(df,activity_col_name):
 def belt_subplots(df):
     # Initialize figure with subplots
     fig = make_subplots(
-        rows=2, 
-        cols=2, 
+        rows=4, 
+        cols=1, 
         subplot_titles=("Respiration1", "Respiration2", "Respiration3", "ECG")
     )
     # Add traces
     # # timestamp,Respiration1,Respiration2,Respiration3,ECG,activity,datetime_est
     fig.add_trace(go.Scatter(x=df.index, y=df["Respiration1"]), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df["Respiration2"]), row=1, col=2)
-    fig.add_trace(go.Scatter(x=df.index, y=df["Respiration3"]), row=2, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df["ECG"]), row=2, col=2)
+    fig.add_trace(go.Scatter(x=df.index, y=df["Respiration2"]), row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df["Respiration3"]), row=3, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df["ECG"]), row=4, col=1)
 
     # Update layout
-    fig.update_layout(height=700, width=1200, title_text="2x2 Subplots")
-
-    # Show the plot
-    # fig.show()
+    fig.update_layout(height=900, width=3000, title_text="Belt data plots")
     return fig
 
 

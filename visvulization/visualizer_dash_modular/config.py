@@ -1,0 +1,12 @@
+class Config:
+    FILTER_NAME = "heart"
+    BELT_NAME = "belt"
+    ROWS = 4
+    COLS = 4
+    MAIN_PLOT_HEIGHT = 500
+    ACTIVITY_PLOT_HEIGHT = 500
+    TIME_DIFF_PLOT_HEIGHT = 400
+    BELT_PLOT_HEIGHT = 400
+    BELT_PLOT_HEIGHT_BIG = 900
+    BG_COLOR = '#f0f8ff'
+    BORDER_COLOR = '#0000ff'
