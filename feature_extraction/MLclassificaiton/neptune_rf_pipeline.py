@@ -299,12 +299,6 @@ def main():
     run["test/precision_macro"] = precision_score(yte,ypred,average="macro",zero_division=0)
     run["test/recall_macro"] = recall_score(yte,ypred,average="macro",zero_division=0)
     run["test/f1_macro"] = f1_score(yte,ypred,average="macro",zero_division=0)
-
-    # --- FIX START ---
-    # Add run.wait() before attempting to fetch metrics to ensure they are synchronized.
-    run.wait()
-    # --- FIX END ---
-
     print(f"DEBUG: Test accuracy: {run['test/accuracy'].fetch()}") # Debug log
     print(f"DEBUG: Test precision (macro): {run['test/precision_macro'].fetch()}") # Debug log
 
