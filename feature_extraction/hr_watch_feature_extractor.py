@@ -45,9 +45,21 @@ ACTIVITY_LEGEND = {
     "prepare speech": 2,
     "give speech": 3,
     "mental math": 5,
-    # Adding new activities from the CSV and assigning new numerical labels
-    "stationary_Bike1": 7, # Reusing labels 7 and 8, assuming these map to "Bike Legs" and "Bike Hand" logically.
-    "stationary_Bike2": 8, # If these are distinct activities, consider using 9 and 10 and updating labels list.
+    # Assigning stationary bikes to existing Bike Legs (7) and Bike Hand (8) labels as per user's clarification
+    "stationary_Bike1": 7,
+    "stationary_Bike2": 8,
+}
+
+# Define a consistent map for display labels in plots (numerical ID to human-readable string)
+DISPLAY_LABEL_MAP = {
+    1: "Rest 1",
+    2: "Prepare Speech",
+    3: "Give Speech",
+    4: "Rest 2",
+    5: "Mental Math",
+    6: "Rest 3",
+    7: "Bike Legs",
+    8: "Bike Hand",
 }
 
 def map_activity(series: pd.Series) -> pd.Series:
@@ -83,17 +95,26 @@ def get_cv(cv_choice: str, random_state: int):
 def hash_features(cols: List[str]) -> str:
     return hashlib.md5("|".join(cols).encode()).hexdigest()
 
-def plot_cm(y_true, y_pred, labels, path):
-    # Ensure labels passed to confusion_matrix correspond to the actual y_true values
-    # Filtering out -1 earlier should make sure y_true only contains 1-8.
-    cm = confusion_matrix(y_true, y_pred, labels=range(1,len(labels)+1))
-    disp = ConfusionMatrixDisplay(cm, display_labels=labels)
-    fig, ax = plt.subplots(figsize=(6,6))
-    disp.plot(ax=ax, xticks_rotation=45, cmap=None, values_format="d")
+def plot_cm(y_true, y_pred, path): # Removed `all_display_labels` argument, now uses DISPLAY_LABEL_MAP
+    """
+    Plots confusion matrix, dynamically determining active labels for calculation and display.
+    """
+    # Get unique numerical classes present in y_true and y_pred
+    active_numerical_labels = np.unique(np.concatenate((y_true, y_pred))).tolist()
+    active_numerical_labels.sort() # Ensure labels are sorted for consistent plotting
+
+    # Get display names for only the active numerical labels using the global map
+    display_labels_for_plot = [DISPLAY_LABEL_MAP.get(val, f"Class {val}") for val in active_numerical_labels]
+
+    # Pass only the active numerical labels to confusion_matrix
+    cm = confusion_matrix(y_true, y_pred, labels=active_numerical_labels)
+    disp = ConfusionMatrixDisplay(cm, display_labels=display_labels_for_plot) # Use the specific display labels
+    fig, ax = plt.subplots(figsize=(8,8)) # Increased size for better readability
+    disp.plot(ax=ax, xticks_rotation=45, cmap=plt.cm.Blues, values_format="d") # Use a cmap for better visuals
     plt.tight_layout(); fig.savefig(path, dpi=200); plt.close(fig)
     return cm
 
-def plot_roc(y_true, y_proba, labels, model_classes, path):
+def plot_roc(y_true, y_proba, model_classes, path): # Removed `labels` argument, now uses DISPLAY_LABEL_MAP
     """
     Plots ROC curves for multi-class classification, handling cases where
     not all classes are present in the test set.
@@ -102,7 +123,6 @@ def plot_roc(y_true, y_proba, labels, model_classes, path):
         y_true (np.array): True labels of the test set.
         y_proba (np.array): Predicted probabilities for each class from the model.
                            Columns must correspond to model_classes.
-        labels (list): List of all possible string display labels.
         model_classes (np.array): The classes the model was trained on,
                                   defining the order of columns in y_proba.
         path (str): File path to save the ROC plot.
@@ -125,19 +145,8 @@ def plot_roc(y_true, y_proba, labels, model_classes, path):
             # Select the corresponding probability column from y_proba
             y_proba_for_class = y_proba[:, i]
 
-            # Find the display name for this class from the full labels list.
-            display_name = ""
-            # Iterate through ACTIVITY_LEGEND to find the string name corresponding to model_class_val
-            for name_str, val in ACTIVITY_LEGEND.items():
-                if val == model_class_val:
-                    # Prefer the original case from labels list if available
-                    if name_str in labels: # Check if this specific string name is in the ordered 'labels' list
-                        display_name = name_str
-                    else: # Fallback to any matching name from ACTIVITY_LEGEND
-                        display_name = name_str
-                    break
-            if not display_name:
-                display_name = f"Class {model_class_val}" # Fallback name
+            # Get display name using the global map
+            display_name = DISPLAY_LABEL_MAP.get(model_class_val, f"Class {model_class_val}")
 
             # Plot ROC curve for the current class
             RocCurveDisplay.from_predictions(y_true_binary, y_proba_for_class, name=display_name, ax=ax)
@@ -175,17 +184,6 @@ def plot_roc(y_true, y_proba, labels, model_classes, path):
 
     ax.set_title(f"ROC macro={macro:.3f}, micro={micro:.3f}")
     plt.tight_layout(); fig.savefig(path, dpi=200); plt.close(fig)
-
-    # Convert np.nan to None for Neptune logging, as Neptune might interpret np.nan as unsupported type
-    # if it's not handled gracefully by your client version for direct dictionary assignment.
-    # This explicitly converts numpy NaNs to Python's None type.
-    for key, value in aucs.items():
-        if pd.isna(value):
-            aucs[key] = None
-    if pd.isna(macro):
-        macro = None
-    if pd.isna(micro):
-        micro = None
 
     return {"per_class": aucs,"macro":macro,"micro":micro}
 
@@ -295,25 +293,32 @@ def main():
     ypred = best_model.predict(Xte)
     print(f"DEBUG: Test set predictions generated. Shape of ypred: {ypred.shape}") # Debug log
 
-    run["test/accuracy"] = accuracy_score(yte,ypred)
-    run["test/precision_macro"] = precision_score(yte,ypred,average="macro",zero_division=0)
-    run["test/recall_macro"] = recall_score(yte,ypred,average="macro",zero_division=0)
-    run["test/f1_macro"] = f1_score(yte,ypred,average="macro",zero_division=0)
+    test_accuracy_val = accuracy_score(yte,ypred)
+    test_precision_macro_val = precision_score(yte,ypred,average="macro",zero_division=0)
+    test_recall_macro_val = recall_score(yte,ypred,average="macro",zero_division=0)
+    test_f1_macro_val = f1_score(yte,ypred,average="macro",zero_division=0)
 
-    # --- FIX START ---
+    run["test/accuracy"] = test_accuracy_val
+    run["test/precision_macro"] = test_precision_macro_val
+    run["test/recall_macro"] = test_recall_macro_val
+    run["test/f1_macro"] = test_f1_macro_val
+
     # Add run.wait() before attempting to fetch metrics to ensure they are synchronized.
     run.wait()
-    # --- FIX END ---
 
-    print(f"DEBUG: Test accuracy: {run['test/accuracy'].fetch()}") # Debug log
-    print(f"DEBUG: Test precision (macro): {run['test/precision_macro'].fetch()}") # Debug log
+    # FIX: Use the locally stored variables for printing, not fetching from run object
+    print(f"DEBUG: Test accuracy: {test_accuracy_val}") # Debug log
+    print(f"DEBUG: Test precision (macro): {test_precision_macro_val}") # Debug log
+    print(f"DEBUG: Test recall (macro): {test_recall_macro_val}") # Debug log
+    print(f"DEBUG: Test F1 (macro): {test_f1_macro_val}") # Debug log
+
 
     print("🖼️ Stage: Plotting Confusion Matrix") # Stage log
     # Confusion matrix
-    # Labels must match the numerical values found in y_true after mapping.
-    # Updated to include new stationary bike activities in the display labels.
-    labels = ["Rest 1","Prepare Speech","Give Speech","Rest 2","Mental Math","Rest 3","Bike Legs","Bike Hand", "Stationary Bike 1", "Stationary Bike 2"]
-    cm = plot_cm(yte, ypred, labels, "cm.png")
+    # The 'labels' list for display names should correspond to the numerical labels 1-8
+    # as defined by DISPLAY_LABEL_MAP.
+    labels_for_display = list(DISPLAY_LABEL_MAP.values())
+    cm = plot_cm(yte, ypred, labels_for_display, "cm.png")
     run["plots/confusion_matrix"].upload("cm.png")
     print("DEBUG: Confusion matrix plotted and uploaded to Neptune.") # Debug log
 
@@ -324,7 +329,7 @@ def main():
         print(f"DEBUG: yprob (predicted probabilities) shape: {yprob.shape}") # Debug log
         print(f"DEBUG: Model classes: {best_model.named_steps['clf'].classes_}") # Debug log
         # Pass the model's classes_ to plot_roc to correctly align y_proba columns
-        roc = plot_roc(yte, yprob, labels, best_model.named_steps["clf"].classes_, "roc.png")
+        roc = plot_roc(yte, yprob, best_model.named_steps["clf"].classes_, "roc.png")
         run["plots/roc"].upload("roc.png")
         # Corrected: Directly assign the dictionary for ROC metrics
         run["metrics/test/roc"] = roc
