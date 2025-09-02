@@ -1,32 +1,18 @@
-
-import pandas as pd 
-import numpy as np 
-import os 
+import pandas as pd
+import numpy as np
+import os
 import glob
-import plotly.express as px
 import re
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
 import bioread
-from scipy.signal import resample
-
 import pytz
-
+import argparse
 from datetime import datetime
 from pathlib import Path
-import glob
-import ipywidgets as widgets
-from IPython.display import display
 from pandas.errors import EmptyDataError
-import dqm
-# from smarwatch_modules.smartwatch_processing_module import *
+from scipy.signal import resample
 
-
-root_folder_str = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/data/"
 root_data_set = Path("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/data/")
-WRITE_FILE = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Concat_File"
-
+WRITE_FILE = Path("/Volumes/CW_2024/Concat_File")
 def process_and_save_data(csv_files, participant_folder, data_type, columns=None):
     """
     Helper function to process and save a specific type of data.
@@ -35,7 +21,6 @@ def process_and_save_data(csv_files, participant_folder, data_type, columns=None
     found_files = False
     
     for csv_file in csv_files:
-        # Corrected line: Use .name to get the filename string
         if data_type in csv_file.name: 
             print(f"Processing {data_type} for {participant_folder}...")
             found_files = True
@@ -53,10 +38,48 @@ def process_and_save_data(csv_files, participant_folder, data_type, columns=None
     if found_files and df_list:
         try:
             combined_df = pd.concat(df_list, ignore_index=True)
+            
+            # --- START: Modified code to include 'acc' data type ---
+            if data_type in ['heart_rate', 'acc']:
+                # Define the mapping dictionary
+                activity_mapping = {
+                    'Rest_1': 1,
+                    'Prepare_Speech': 2,
+                    'Give_Speech': 3,
+                    'Rest_2': 4,
+                    'Mental_Math': 5,
+                    'Rest_3': 6,
+                    'Stationary_Bike_Legs': 7,
+                    'Stationary_Bike_Leegs': 7,
+                    'Stationary_Biketationary_Bike_Legs': 7,
+                    'SStationary_Bike_Legs': 7,
+                    'Stationaregs': 7,
+                    'Sy_Bike_Legs': 7,
+                    'Statiotationary_Bike_Legs': 7,
+                    'Stationary_Bike_Lege_Legs': 7,
+                    'Statioke_Legs': 7,
+                    'Stationary_nary_Bike_Legs': 7,
+                    'SBike_Legs': 7,
+                    'St_Legs': 7,
+                    'Stationary_Bike_Hand': 8,
+                    'Stationary_Bike_Hantationary_Bike_Hand': 8,
+                    'Statationary_Bike_Hand': 8,
+                    'Statiand': 8,
+                    'Stationar_Hand': 8,
+                    'Stationary_By_Bike_Hand': 8,
+                    'Stationary_Bikeke_Hand': 8,
+                    'Statind': 8,
+                }
+                
+                # Apply the mapping and fill NaN with -1
+                combined_df['activity_int'] = combined_df['activity'].map(activity_mapping).fillna(-1)
+                print(f"Created new 'activity_int' column for {data_type} data.")
+            # --- END: Modified code ---
+
             if 'Timestamp' in combined_df.columns:
                 combined_df["Timestamp_pd"] = pd.to_datetime(combined_df["Timestamp"], errors='coerce')
             
-            output_path = Path(WRITE_FILE) / f"{data_type}_{participant_folder}.csv"
+            output_path = WRITE_FILE / f"{data_type}_{participant_folder}.csv"
             combined_df.to_csv(output_path, index=False)
             print(f"Successfully saved {data_type} data to {output_path}")
         except ValueError as e:
@@ -67,14 +90,14 @@ def process_and_save_data(csv_files, participant_folder, data_type, columns=None
         print(f"No valid data to concatenate for {data_type} from {participant_folder}.")
     else:
         print(f"No {data_type} files found for {participant_folder}.")
-
-def read_watch_data(root_folder_str, root_data_set):
+        
+def process_watch_data(root_data_set):
     participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
     sorted_participants = sorted(participant_folders, key=lambda x: int(x[1:]))
     
     for participant_folder in sorted_participants:
         print(f"\nProcessing PID: {participant_folder}")
-        p_folder = Path(root_folder_str) / participant_folder / "SMARTWATCH"
+        p_folder = root_data_set / participant_folder / "SMARTWATCH"
         
         if not p_folder.is_dir():
             print(f"SMARTWATCH folder not found for {participant_folder}. Skipping.")
@@ -88,120 +111,116 @@ def read_watch_data(root_folder_str, root_data_set):
         smart_watch_base_folder = p_folder / dated_folders[0]
         csv_files = list(smart_watch_base_folder.glob('*.csv'))
         
-        # Check if any file exists before processing to avoid unnecessary loops
         if not csv_files:
             print(f"No CSV files found for {participant_folder}. Skipping.")
             continue
         
-        # Process each modality separately
         process_and_save_data(csv_files, participant_folder, 'heart_rate')
         process_and_save_data(csv_files, participant_folder, 'acc', columns=["x", "y", "z", "unix_timesamp", "date_time", "activity"])
         process_and_save_data(csv_files, participant_folder, 'gry')
-   
-# Path to the main folder
-def read_belt_data(main_folder_path):
-    # List to store individual DataFrames.
-    dfs = []
-    # Iterate through each folder.
-    for folder_name in os.listdir(main_folder_path):
-        folder_path = os.path.join(main_folder_path, folder_name)
-        # Check if it's a directory.
-        if os.path.isdir(folder_path):
-            # Iterate through each file in the folder.
-            for file_name in os.listdir(folder_path):
-                if file_name != ".DS_Store":
-                    print("file_name: ",file_name)
-                    if "TEST" in file_name and file_name != ".DS_Store":
-                        folder_path_test = os.path.join(folder_path, file_name)
-                        print("TEST file_path_test: ",folder_path_test)
-                        for filename in  os.listdir(folder_path_test):
-                            if  filename != ".DS_Store":
-                                print("TEST: filename: ",filename)
-                                try:
-                                    df_belt = pd.read_csv(os.path.join(folder_path_test, filename), delimiter=",")  # Change delimiter if needed
-                                    df_belt.columns = ["timestamp","Respiration1","Respiration2","Respiration3","ECG"]
-                                    activity_name1 = filename.split(" ")[0].split("-")[1]  #"stationary"
-                                    activity_name2 =  filename.split(" ")[1].split("-")[0] # "Bike1"
-                                    print("TEST Activity ID: ",activity_name1 + "_"+activity_name2)
-                                    #print("TEST Activity ID2: ",filename.split(" ")[1].split("-")[0])
-                                    df_belt["activity"]= activity_name1 + "_" + activity_name2 #file_name.split("-")[1]
-                                    print(df_belt.head())
-                                    dfs.append(df_belt)
-                                except EmptyDataError:
-                                    df_belt = None
-                                    #print("PASS")
-                    else:
+
+def process_belt_data(root_data_set):
+    participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
+    sorted_participants = sorted(participant_folders, key=lambda x: int(x[1:]))
+    
+    for pid in sorted_participants:
+        output_file_path = WRITE_FILE / f"{pid}_belt.csv"
+        if output_file_path.exists():
+            print(f"File exists, skipping processing for {pid} belt data.")
+            continue
+        
+        print(f"\nProcessing PID: {pid}")
+        main_folder_path = root_data_set.parent / pid / 'BELT' 
+        
+        if not main_folder_path.is_dir():
+            print(f"BELT folder not found for {pid}. Skipping.")
+            continue
+            
+        dfs = []
+        for folder_name in os.listdir(main_folder_path):
+            folder_path = main_folder_path / folder_name
+            if folder_path.is_dir():
+                for file_name in os.listdir(folder_path):
+                    file_path = folder_path / file_name
+                    if file_path.is_file() and file_name != ".DS_Store":
                         try:
-                            file_path = os.path.join(folder_path, file_name)
-                            df_belt = pd.read_csv(file_path, delimiter=",")  # Change delimiter if needed.
-                            df_belt.columns = ["timestamp","Respiration1","Respiration2","Respiration3","ECG"]
-                            df_belt["activity"]=file_name.split("-")[1]
-                            print(df_belt.head())
-                        except UnicodeDecodeError:
-                            df_belt =None
-                            print("PASS UnicodeDecodeError")
-                        
-                        # Read the .ACQ file and append to list.
-                        dfs.append(df_belt)
-    df_combined_concat = pd.concat(dfs)
-    print("df_combined_concat: ",df_combined_concat["activity"].unique())
-    return  df_combined_concat
+                            df_belt = pd.read_csv(file_path, delimiter=",", names=["timestamp", "Respiration1", "Respiration2", "Respiration3", "ECG"], skiprows=1)
+                            df_belt["activity"] = re.sub(r'[^a-zA-Z0-9_]', '', file_name.split("-")[1])
+                            dfs.append(df_belt)
+                        except (pd.errors.EmptyDataError, UnicodeDecodeError):
+                            print(f"Could not read or empty file: {file_path}")
+                        except IndexError:
+                            print(f"Skipping malformed filename: {file_name}")
 
-# Get start and end time from belt data
-# Input parameters: df_belt
-def getLables(df_belt):
-    # Convert the millisecond Unix timestamp to human-readable datetime in EST
-    df_combined_concat['datetime_est'] = pd.to_datetime(df_combined_concat['timestamp'], unit='ms')  # Convert to UTC datetime
-    df_combined_concat['datetime_est'] = df_combined_concat['datetime_est'].dt.tz_localize('UTC').dt.tz_convert('US/Eastern')  # Convert to EST timezone
-    # Group by activity and find start and end times
-    activity_times = df_combined_concat.groupby('activity')['datetime_est'].agg(['min', 'max']).reset_index()
-    activity_times.rename(columns={'min': 'start_time', 'max': 'end_time',"activity":"Belt_Activity_Labels"}, inplace=True)
-    return activity_times
+        if dfs:
+            df_combined_concat = pd.concat(dfs, ignore_index=True)
+            df_combined_concat.to_csv(output_file_path, index=False)
+            print(f"Successfully saved combined belt data to {output_file_path}")
+        else:
+            print(f"No valid belt data found for {pid}.")
+            
+def process_biopac_data(root_data_set):
+    participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
+    sorted_participants = sorted(participant_folders, key=lambda x: int(x[1:]))
 
+    for pid in sorted_participants:
+        output_file_path = WRITE_FILE / f"{pid}_biopac.csv"
+        if output_file_path.exists():
+            print(f"File exists, skipping processing for {pid} biopac data.")
+            continue
+            
+        print(f"\nProcessing PID: {pid}")
+        biopac_folder = root_data_set.parent / pid / 'BIOPAC'
+        
+        if not biopac_folder.is_dir():
+            print(f"BIOPAC folder not found for {pid}. Skipping.")
+            continue
+        
+        biopac_files = list(biopac_folder.glob('*.acq'))
+        if not biopac_files:
+            print(f"No Biopac files found for {pid}. Skipping.")
+            continue
 
-# read_watch_data(root_folder_str,root_data_set)
+        dfs = []
+        for file_path in biopac_files:
+            try:
+                data = bioread.read_file(file_path)
+                df = pd.DataFrame()
+                for channel in data.channels:
+                    df[channel.name] = channel.data
+                
+                df['sample_number'] = range(len(df))
+                
+                dfs.append(df)
+            except Exception as e:
+                print(f"Error reading Biopac file {file_path}: {e}")
+
+        if dfs:
+            combined_biopac_df = pd.concat(dfs, ignore_index=True)
+            combined_biopac_df.to_csv(output_file_path, index=False)
+            print(f"Successfully saved combined Biopac data to {output_file_path}")
+        else:
+            print(f"No valid Biopac data found for {pid}.")
+
+# ----------------- Main function to handle arguments -----------------
+def main(data_type):
+    if data_type == 'watch':
+        process_watch_data(root_data_set)
+    elif data_type == 'belt':
+        process_belt_data(root_data_set)
+    elif data_type == 'biopac':
+        process_biopac_data(root_data_set)
+    elif data_type == 'all':
+        print("Processing all data types...")
+        process_watch_data(root_data_set)
+        process_belt_data(root_data_set)
+        process_biopac_data(root_data_set)
+    else:
+        print("Invalid data type specified. Please choose 'watch', 'belt', 'biopac', or 'all'.")
 
 if __name__ == "__main__":
-
-    print("######################################## SMARTWATCH DATA ########################################")
-
-    # root_folder = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/2025-Test/CareWear_V2Test/V2/stress_protocol_minder/06-30-25"
-
-    read_watch_data(root_folder_str,root_data_set)
-
-    # participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
-    # print("######################################## BIOPAC DATA ########################################")
-    # print("participant_folders: ",participant_folders)
-    # for pid in participant_folders:
-    #     ## Check if participant ID has already been processed:
-    #     if os.path.exists(WRITE_FILE +"/"+ pid + "_belt.csv"): # eg: P22_belt.csv
-    #         print("File exists PARTICIPANT DATA already processed !! ======================")
-    #     else:
-    #         print("File does not exist")
-    #         print(" pid ================================================= ",pid)
-    #         main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/' + pid + '/BELT'
-    #         read_bio_pac_data(main_folder_path)
-    #         # df_combined_concat = read_belt_data(main_folder_path)
-    #         # print("df_combined_concat: ",df_combined_concat["activity"].unique())
-    #         # activity_times = getLables(df_combined_concat)
-    #         activity_times.to_csv("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Task_Time_Line_Belt/" + "belt_task_timeline_" + pid +".csv")
-    #         print("Filepath of the written file: ")
-    #         print(WRITE_FILE + "/BELT/" + pid + "_belt.csv")
-    #         df_combined_concat.to_csv(WRITE_FILE + "/" + pid + "_belt.csv")
-    #         print("df_combined_concat concat file written ===========================")
-    #         print(df_combined_concat.head())
-
-
-    # participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
-    # ######################################## BIOPAC DATA ########################################
-    # print("######################################## BIOPAC DATA ########################################")
-    # for pid in participant_folders:
-    #     if os.path.exists(WRITE_FILE +"/"+ pid + "_biopac.csv"): # eg: P13_biopac.csv
-    #         print("File exists PARTICIPANT DATA already processed !! ======================")
-    #     else:
-    #         print(" pid ================================================= ",pid)
-    #         main_folder_path = '/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/' + pid + '/BIOPAC'
-    #         df_combined_concat = read_bio_pac_data(main_folder_path)
-    #         WRITE_FILE = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Concat_File"
-
-    #         df_combined_concat.to_csv(WRITE_FILE + "/" + pid + "_biopac.csv")
+    parser = argparse.ArgumentParser(description="Process different types of study data.")
+    parser.add_argument("--data_type", required=True, choices=['watch', 'belt', 'biopac', 'all'], help="The type of data to process.")
+    
+    args = parser.parse_args()
+    main(args.data_type)
