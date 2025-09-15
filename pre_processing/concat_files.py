@@ -10,9 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from pandas.errors import EmptyDataError
 from scipy.signal import resample
+# python3 concat_files.py --data_type watch
 
 root_data_set = Path("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/data/")
-WRITE_FILE = Path("/Volumes/CW_2024/Concat_File")
+WRITE_FILE = Path("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Concat_File")
 def process_and_save_data(csv_files, participant_folder, data_type, columns=None):
     """
     Helper function to process and save a specific type of data.
@@ -107,17 +108,39 @@ def process_watch_data(root_data_set):
         if not dated_folders:
             print(f"No dated folders found for {participant_folder}. Skipping.")
             continue
-        
         smart_watch_base_folder = p_folder / dated_folders[0]
         csv_files = list(smart_watch_base_folder.glob('*.csv'))
+
+        # Check for heart_rate
+        output_file_heart_rate = WRITE_FILE / f"heart_rate_{participant_folder}.csv"
+        if not output_file_heart_rate.exists():
+            process_and_save_data(csv_files, participant_folder, 'heart_rate')
+        else:
+            print(f"File already exists, skipping processing for {participant_folder} heart_rate data.")
+
+        # Check for acc
+        output_file_acc = WRITE_FILE / f"acc_{participant_folder}.csv"
+        if not output_file_acc.exists():
+            process_and_save_data(csv_files, participant_folder, 'acc', columns=["x", "y", "z", "unix_timesamp", "date_time", "activity"])
+        else:
+            print(f"File already exists, skipping processing for {participant_folder} acc data.")
+
+        # Check for gry
+        output_file_gry = WRITE_FILE / f"gry_{participant_folder}.csv"
+        if not output_file_gry.exists():
+            process_and_save_data(csv_files, participant_folder, 'gry')
+        else:
+            print(f"File already exists, skipping processing for {participant_folder} gry data.")
+        # smart_watch_base_folder = p_folder / dated_folders[0]
+        # csv_files = list(smart_watch_base_folder.glob('*.csv'))
         
-        if not csv_files:
-            print(f"No CSV files found for {participant_folder}. Skipping.")
-            continue
+        # if not csv_files:
+        #     print(f"No CSV files found for {participant_folder}. Skipping.")
+        #     continue
         
-        process_and_save_data(csv_files, participant_folder, 'heart_rate')
-        process_and_save_data(csv_files, participant_folder, 'acc', columns=["x", "y", "z", "unix_timesamp", "date_time", "activity"])
-        process_and_save_data(csv_files, participant_folder, 'gry')
+        # process_and_save_data(csv_files, participant_folder, 'heart_rate')
+        # process_and_save_data(csv_files, participant_folder, 'acc', columns=["x", "y", "z", "unix_timesamp", "date_time", "activity"])
+        # process_and_save_data(csv_files, participant_folder, 'gry')
 
 def process_belt_data(root_data_set):
     participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
