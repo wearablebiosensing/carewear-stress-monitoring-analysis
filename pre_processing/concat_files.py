@@ -12,8 +12,8 @@ from pandas.errors import EmptyDataError
 from scipy.signal import resample
 # python3 concat_files.py --data_type watch
 
-root_data_set = Path("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/data/")
-WRITE_FILE = Path("/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Concat_File")
+root_data_set = Path("/Volumes/CW_2024/CareWear/1_data/watch_tablet_data")
+WRITE_FILE = Path("/Volumes/CW_2024/CareWear/2_Concat_File")
 def process_and_save_data(csv_files, participant_folder, data_type, columns=None):
     """
     Helper function to process and save a specific type of data.
@@ -21,15 +21,24 @@ def process_and_save_data(csv_files, participant_folder, data_type, columns=None
     df_list = []
     found_files = False
     
-    for csv_file in csv_files:
+    # Sort files to ensure consistent order, which is crucial for handling headers
+    sorted_files = sorted(csv_files, key=lambda f: f.name)
+
+    for i, csv_file in enumerate(sorted_files):
         if data_type in csv_file.name: 
             print(f"Processing {data_type} for {participant_folder}...")
             found_files = True
             try:
                 if columns:
-                    df = pd.read_csv(csv_file, on_bad_lines='skip', names=columns)
+                    if i == 0:
+                        # Read the first file with the specified column names, skipping the header row
+                        df = pd.read_csv(csv_file, on_bad_lines='skip', names=columns, skiprows=1)
+                    else:
+                        # For subsequent files, read without a header, as the header is already defined
+                        df = pd.read_csv(csv_file, on_bad_lines='skip', names=columns, header=None)
                 else:
                     df = pd.read_csv(csv_file, on_bad_lines='skip')
+                
                 df_list.append(df)
             except EmptyDataError:
                 print(f"EmptyDataError: {csv_file} is empty.")
@@ -91,7 +100,7 @@ def process_and_save_data(csv_files, participant_folder, data_type, columns=None
         print(f"No valid data to concatenate for {data_type} from {participant_folder}.")
     else:
         print(f"No {data_type} files found for {participant_folder}.")
-        
+
 def process_watch_data(root_data_set):
     participant_folders = [folder.name for folder in root_data_set.iterdir() if folder.is_dir() and folder.name.startswith('P')]
     sorted_participants = sorted(participant_folders, key=lambda x: int(x[1:]))

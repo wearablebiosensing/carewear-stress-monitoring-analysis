@@ -8,11 +8,13 @@ import argparse
 
 # --- Constants ---
 # NOTE: Please update these paths to your local machine
-root = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/"
-INPUT_DIR = root + "Concat_File"
-OUTPUT_DIR = root + "merged_lables"
-MANUAL_LABELS_DIR = root + "other/Task_Time_Line_Manual"
-BELT_LABELS_DIR = root + "Task_Time_Line_Belt"
+# /Volumes/CW_2024/CareWear/1_data/watch_tablet_data
+# "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/"
+root = "/Volumes/CW_2024/CareWear"
+INPUT_DIR = root + "/2_Concat_File"
+OUTPUT_DIR = root + "/4_merged_lables" #root + "merged_lables"
+MANUAL_LABELS_DIR = root + "/3_task_timeline/Task_Time_Line_Manual"
+BELT_LABELS_DIR = root + "/3_task_timeline/Task_Time_Line_Belt"
 
 # Define the mapping dictionary
 activity_mapping = {
@@ -93,7 +95,7 @@ def add_activity_labels(df, labels_df, label_col_name, activity_col):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Merge activity labels with data files.")
-    parser.add_argument("--file_type", required=True, choices=['biopac', 'heart_rate', 'acc', 'gyro'],
+    parser.add_argument("--file_type", required=True, choices=['biopac', 'heart_rate', 'acc', 'gry'],
                         help="The type of data file to process (e.g., 'heart_rate').")
     parser.add_argument("--labels_dir", required=True, choices=['manual', 'belt'],
                         help="The type of labels to merge ('manual' or 'belt').")
