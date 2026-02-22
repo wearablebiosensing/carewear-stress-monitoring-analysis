@@ -3,7 +3,7 @@ import pandas as pd
 from dash import Dash, dcc, html, Input, Output
 import plotly.graph_objs as go
 
-DATA_DIR = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024-25/Concat_File"
+DATA_DIR = "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/Concat_File"
 
 def list_participant_files(data_dir):
     return [f for f in os.listdir(data_dir) if f.endswith('.csv')]

@@ -12,8 +12,8 @@ from pandas.errors import EmptyDataError
 from scipy.signal import resample
 # python3 concat_files.py --data_type watch
 
-root_data_set = Path("/Volumes/CW_2024/CareWear/1_data/watch_tablet_data")
-WRITE_FILE = Path("/Volumes/CW_2024/CareWear/2_Concat_File")
+root_data_set = Path("/Volumes/SS/Project_CareWear/DATASET/ss_drive/1_data/watch_tablet_data")
+WRITE_FILE = Path("/Volumes/SS/Project_CareWear/DATASET/ss_drive/2_Concat_File")
 def process_and_save_data(csv_files, participant_folder, data_type, columns=None):
     """
     Helper function to process and save a specific type of data.

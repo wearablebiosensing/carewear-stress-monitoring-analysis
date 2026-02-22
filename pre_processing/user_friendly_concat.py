@@ -27,6 +27,7 @@ class ConcatApp(TkinterDnD.Tk):
         self.show_labels_var = tk.BooleanVar(value=False)
         self.timestamp_format_var = tk.StringVar(value="Auto-Detect")
         self.original_bg_color = None
+        self.output_filename = tk.StringVar(value="concatenated_data")
 
         self.activity_mapping_num = {
             "None": -1, 'rest1': 1, 'prepare speech': 2, 'give speech': 3,
@@ -78,10 +79,12 @@ class ConcatApp(TkinterDnD.Tk):
         tk.Label(input_frame, text="File String Filter:").pack(side="left", padx=5)
         self.string_entry = tk.Entry(input_frame, textvariable=self.search_string, width=15)
         self.string_entry.pack(side="left", padx=5)
-        
+        tk.Label(input_frame, text="Enter File Name: ").pack(side="left", padx=5)
+        self.filename_entry = tk.Entry(input_frame, textvariable=self.output_filename, width=20)
+        self.filename_entry.pack(side="left", padx=5)
+
         tk.Button(input_frame, text="Concatenate Files", command=self.concatenate_files, bg="#AED6F1").pack(side="left", padx=10)
         
-        # --- THIS BUTTON IS NOW INCLUDED ---
         tk.Button(input_frame, text="Save Concatenated", command=self.save_concatenated_file).pack(side="left", padx=10)
 
         merge_frame = tk.Frame(concat_frame)
@@ -156,9 +159,18 @@ class ConcatApp(TkinterDnD.Tk):
             self.log_message(f"File for plotting selected: {path}\n")
             try:
                 df = pd.read_csv(path, on_bad_lines='skip', low_memory=False)
+
+                # --- CORRECTED: Ensure 'HeartRate' column is numeric ---
+                if 'HeartRate' in df.columns:
+                    self.log_message("Found 'HeartRate' column. Converting to numeric...\n")
+                    # Replace non-numeric values (like 'searching') with NaN
+                    df['HeartRate'] = pd.to_numeric(df['HeartRate'], errors='coerce')
+                
                 self.plot_df = self._prepare_data_timestamps(df)
                 if 'Timestamp_pd' in self.plot_df.columns:
                     self.plot_df.sort_values(by='Timestamp_pd', inplace=True, ignore_index=True)
+                
+                self.log_message(f"Successfully loaded {len(df)} rows.\n")
                 self.update_plot_options()
             except Exception as e:
                 messagebox.showerror("File Read Error", f"Failed to read or process the file:\n{e}")
@@ -182,9 +194,20 @@ class ConcatApp(TkinterDnD.Tk):
             return
         df_list = []
         self.log_message(f"Searching for files containing '{search_string}' in '{folder_path}'...\n")
-        for file in glob.glob(os.path.join(folder_path, f"*{search_string}*.csv")):
+        
+        search_pattern = os.path.join(folder_path, f"*{search_string}*.csv")
+        
+        for file in glob.glob(search_pattern):
+            if not os.path.isfile(file):
+                continue
             try:
                 df = pd.read_csv(file, on_bad_lines='skip', low_memory=False)
+
+                # --- CORRECTED: Ensure 'HeartRate' column is numeric ---
+                if 'HeartRate' in df.columns:
+                    # Replace non-numeric values (like 'searching') with NaN
+                    df['HeartRate'] = pd.to_numeric(df['HeartRate'], errors='coerce')
+
                 df_list.append(df)
                 self.log_message(f"  - Processed {os.path.basename(file)}: {df.shape[0]} rows\n")
             except Exception as e:
@@ -200,74 +223,77 @@ class ConcatApp(TkinterDnD.Tk):
     def _prepare_data_timestamps(self, df):
         df_copy = df.copy()
         source_col = None
-        for col_name in ['Timestamp_pd', 'Timestamp', 'date_time']:
-            if col_name in df_copy.columns:
+        for col_name in df_copy.columns:
+            if 'timestamp' in str(col_name).lower() or 'time' in str(col_name).lower():
                 source_col = col_name
                 break
         
         if not source_col:
-            self.log_message("Warning: No timestamp column found. Plotting against index.\n")
+            self.log_message("Warning: No timestamp column found for optional processing.\n")
             return df_copy
 
-        df_copy['Timestamp_pd'] = pd.to_datetime(df_copy[source_col], errors='coerce')
+        temp_timestamp = pd.to_numeric(df_copy[source_col], errors='coerce')
+        if temp_timestamp.mean() > 1e12:
+            df_copy['Timestamp_pd'] = pd.to_datetime(temp_timestamp, unit='ms', errors='coerce')
+        else:
+            df_copy['Timestamp_pd'] = pd.to_datetime(temp_timestamp, errors='coerce')
         
-        if self.timestamp_format_var.get() == "12-Hour PM Fix":
+        if self.timestamp_format_var.get() == "12-Hour PM Fix" and 'Timestamp_pd' in df_copy.columns:
             self.log_message("Applying '12-Hour PM Fix' to timestamps...\n")
             condition = df_copy['Timestamp_pd'].dt.hour < 12
             df_copy.loc[condition, 'Timestamp_pd'] += pd.Timedelta(hours=12)
         
         return df_copy
 
-    # --- NEW FUNCTION FOR THE BUTTON ---
     def save_concatenated_file(self):
         if self.output_df is None:
             messagebox.showerror("Error", "No concatenated data to save. Please 'Concatenate Files' first.")
             return
 
-        self.log_message("\nPreparing concatenated data for saving...\n")
-        try:
-            df_to_save = self._prepare_data_timestamps(self.output_df)
-        except Exception as e:
-            messagebox.showerror("Timestamp Error", f"Failed to prepare timestamps:\n{e}")
-            self.log_message(f"Error preparing timestamps for save: {e}\n")
+        filename = self.output_filename.get()
+        if not filename:
+            messagebox.showerror("Error", "Please enter a filename.")
             return
+
+        if not filename.lower().endswith(".csv"):
+            filename += ".csv"
 
         file_path = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV files", "*.csv")],
-            initialfile="concatenated_data.csv"
+            initialfile=filename
         )
         if file_path:
             try:
-                df_to_save.to_csv(file_path, index=False)
+                self.output_df.to_csv(file_path, index=False)
                 messagebox.showinfo("Success", f"Concatenated data successfully saved to {file_path}")
                 self.log_message(f"Saved concatenated file to: {file_path}\n")
             except Exception as e:
                 messagebox.showerror("Save Error", f"Failed to save file: {e}")
 
     def add_activity_labels(self, data_df, labels_df):
+        if 'Timestamp_pd' not in data_df.columns or data_df['Timestamp_pd'].isnull().all():
+            raise ValueError("Cannot add labels without a valid, converted timestamp column.")
+        
         data_df.dropna(subset=['Timestamp_pd'], inplace=True)
-        if data_df.empty:
-            raise ValueError("Data is empty after handling timestamps.")
         labels_df.dropna(subset=['start_time', 'end_time', 'manual_labels_activity'], inplace=True)
+        
         numeric_start_times = pd.to_numeric(labels_df['start_time'], errors='coerce')
         first_valid_time = numeric_start_times.dropna().iloc[0] if not numeric_start_times.dropna().empty else None
-        if first_valid_time is not None and first_valid_time > 1000000000:
+        
+        if first_valid_time is not None and first_valid_time > 1e12:
             self.log_message("  - Detected millisecond timestamp format in labels file.\n")
             for col in ('start_time', 'end_time'):
                 labels_df[col] = pd.to_datetime(labels_df[col], unit='ms', errors='coerce')
-                if labels_df[col].dt.tz is not None:
-                    labels_df[col] = labels_df[col].dt.tz_localize(None)
         else:
             self.log_message("  - Detected string time format in labels file.\n")
             base_date = data_df['Timestamp_pd'].min().date()
             for col in ('start_time', 'end_time'):
                 parsed_times = pd.to_datetime(labels_df[col], errors='coerce').dt.time
                 labels_df[col] = [pd.to_datetime(f"{base_date} {t}") if pd.notna(t) else pd.NaT for t in parsed_times]
-        rows_before_drop = len(labels_df)
+        
         labels_df.dropna(subset=['start_time', 'end_time'], inplace=True)
-        if rows_before_drop > len(labels_df):
-            self.log_message(f"  - Skipped {rows_before_drop - len(labels_df)} label rows due to invalid time format.\n")
+        
         data_df["manual_labels_activity"] = "None"
         for _, row in labels_df.iterrows():
             mask = (data_df['Timestamp_pd'] >= row['start_time']) & (data_df['Timestamp_pd'] <= row['end_time'])
@@ -282,17 +308,21 @@ class ConcatApp(TkinterDnD.Tk):
         if not labels_path or not os.path.exists(labels_path):
             messagebox.showerror("Error", "Please select a valid labels file.")
             return
+            
         self.log_message("\nStarting label merge process...\n")
         try:
-            data_df = self._prepare_data_timestamps(self.output_df)
+            data_df_with_ts = self._prepare_data_timestamps(self.output_df.copy())
             labels_df = pd.read_csv(labels_path)
-            merged_data = self.add_activity_labels(data_df, labels_df)
+            merged_data = self.add_activity_labels(data_df_with_ts, labels_df)
+            
             self.log_message("Sorting merged data by timestamp...\n")
             merged_data.sort_values(by='Timestamp_pd', inplace=True, ignore_index=True)
             self.plot_df = merged_data
+            
             unique_labels = self.plot_df['manual_labels_activity'].unique()
             self.log_message(f"Merge successful. Found labels: {unique_labels}\n")
             self.update_plot_options()
+            
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".csv", filetypes=[("CSV files", "*.csv")],
                 initialfile="merged_data_with_labels.csv")
@@ -307,21 +337,36 @@ class ConcatApp(TkinterDnD.Tk):
     def update_plot_options(self):
         df_to_plot = self.plot_df
         if df_to_plot is None: return
+        
         numeric_cols = df_to_plot.select_dtypes(include=np.number).columns.tolist()
+        if 'Timestamp_pd' in numeric_cols:
+             numeric_cols.remove('Timestamp_pd')
+
         menu = self.plot_option_menu["menu"]
         menu.delete(0, "end")
-        if 'manual_labels_activity' in df_to_plot.columns:
+        
+        if 'manual_labels_activity' in df_to_plot.columns and 'Timestamp_pd' in df_to_plot.columns:
             self.show_labels_chk.config(state="normal")
         else:
             self.show_labels_chk.config(state="disabled")
             self.show_labels_var.set(False)
+            
         if not numeric_cols:
             self.plot_column.set("No numeric data")
             self.plot_option_menu.config(state="disabled")
             return
+            
         for col in numeric_cols:
-            menu.add_command(label=col, command=lambda value=col: self.plot_column.set(value))
-        self.plot_column.set(numeric_cols[0]) 
+            # menu.add_command(label=col, command=lambda value=col: self.plot_column.set(value))
+            menu.add_command(label=col, command=lambda value=col: (self.plot_column.set(value), self.draw_plot()))
+
+        default_col = numeric_cols[0]
+        for col_name in ['Channel 1', 'Channel 2', 'Channel 3', 'Channel 4', 'HeartRate']:
+            if col_name in numeric_cols:
+                default_col = col_name
+                break
+        self.plot_column.set(default_col) 
+        
         self.plot_option_menu.config(state="normal")
         self.draw_plot()
 
@@ -330,17 +375,15 @@ class ConcatApp(TkinterDnD.Tk):
         if df_to_plot is None or not self.plot_column.get() or self.plot_column.get() in ["No data loaded", "No numeric data"]:
             return
         selected_col = self.plot_column.get()
+        if selected_col not in df_to_plot.columns:
+            self.log_message(f"Warning: Column '{selected_col}' not found in the data.\n")
+            return
+            
         self.ax.clear()
         
-        if 'Timestamp_pd' in df_to_plot.columns:
-            x_axis = df_to_plot['Timestamp_pd']
-            x_label = "Timestamp"
-            self.ax.plot(x_axis, df_to_plot[selected_col], label=selected_col, zorder=2)
-            self.fig.autofmt_xdate()
-        else:
-            x_axis = df_to_plot.index
-            x_label = "Index"
-            self.ax.plot(x_axis, df_to_plot[selected_col], label=selected_col, zorder=2)
+        x_axis = df_to_plot.index
+        x_label = "Index"
+        self.ax.plot(x_axis, df_to_plot[selected_col], label=selected_col)
 
         if self.show_labels_var.get() and 'manual_labels_activity' in df_to_plot.columns and 'Timestamp_pd' in df_to_plot.columns:
             self.plot_activity_labels()
@@ -355,27 +398,29 @@ class ConcatApp(TkinterDnD.Tk):
 
     def plot_activity_labels(self):
         df = self.plot_df
-        if df is None: return
-        activity_changes = df[df['manual_labels_activity'] != df['manual_labels_activity'].shift()]
+        if df is None or 'Timestamp_pd' not in df.columns: return
+
         ymin, ymax = self.ax.get_ylim()
         text_y_pos = ymin + (ymax - ymin) * 0.9
-        for index, row in activity_changes.iterrows():
-            current_activity = row['manual_labels_activity']
-            prev_activity = df['manual_labels_activity'].iloc[index - 1] if index > 0 else "None"
-            if prev_activity != "None":
-                end_time = df['Timestamp_pd'].iloc[index - 1]
-                self.ax.axvline(x=end_time, color='r', linestyle='--', linewidth=1.2, zorder=3)
-            if current_activity != "None":
-                start_time = row['Timestamp_pd']
-                self.ax.axvline(x=start_time, color='g', linestyle='--', linewidth=1.2, zorder=3)
-                activity_num = self.activity_mapping_num.get(current_activity, 'N/A')
-                label_text = f' {activity_num}'
-                self.ax.text(start_time, text_y_pos, label_text, color='black',
-                             fontweight='bold', verticalalignment='center', zorder=4,
-                             bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', boxstyle='round,pad=0.2'))
-        last_row_activity = df['manual_labels_activity'].iloc[-1]
-        if last_row_activity != "None":
-             self.ax.axvline(x=df['Timestamp_pd'].iloc[-1], color='r', linestyle='--', linewidth=1.2, zorder=3)
+
+        activity_df = df[df['manual_labels_activity'] != "None"].copy()
+        if activity_df.empty: return
+
+        activity_df['block'] = (activity_df['manual_labels_activity'] != activity_df['manual_labels_activity'].shift()).cumsum()
+        
+        for name, group in activity_df.groupby('block'):
+            start_index = group.index[0]
+            end_index = group.index[-1]
+            activity = group['manual_labels_activity'].iloc[0]
+            
+            self.ax.axvline(x=start_index, color='g', linestyle='--', linewidth=1.2)
+            self.ax.axvline(x=end_index, color='r', linestyle='--', linewidth=1.2)
+            
+            activity_num = self.activity_mapping_num.get(activity, 'N/A')
+            label_text = f' {activity_num}'
+            self.ax.text(start_index, text_y_pos, label_text, color='black',
+                            fontweight='bold', verticalalignment='center',
+                            bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', boxstyle='round,pad=0.2'))
 
 if __name__ == "__main__":
     app = ConcatApp()

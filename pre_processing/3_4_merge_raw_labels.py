@@ -10,7 +10,7 @@ import argparse
 # NOTE: Please update these paths to your local machine
 # /Volumes/CW_2024/CareWear/1_data/watch_tablet_data
 # "/Users/shehjarsadhu/Desktop/UniversityOfRhodeIsland/Graduate/WBL/Project_Carehub_CareWear/DATASET/StudyData_Drive_2024_25/"
-root = "/Volumes/CW_2024/CareWear"
+root = "/Volumes/SS/Project_CareWear/DATASET/ss_drive"#"/Volumes/CW_2024/CareWear"
 INPUT_DIR = root + "/2_Concat_File"
 OUTPUT_DIR = root + "/4_merged_lables" #root + "merged_lables"
 MANUAL_LABELS_DIR = root + "/3_task_timeline/Task_Time_Line_Manual"
