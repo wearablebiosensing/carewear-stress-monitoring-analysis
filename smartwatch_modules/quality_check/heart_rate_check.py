@@ -5,87 +5,140 @@ import glob
 import re
 import tkinter as tk
 from tkinter import filedialog, simpledialog
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+
+print("\n==============================")
+print("Universal Heart Rate Pipeline")
+print("==============================\n")
+
 
 # ==========================================================
-# ---------- ORIGINAL FUNCTIONS (UNCHANGED) ----------
+# SIGNAL QUALITY
 # ==========================================================
 
-def detect_data_gaps(df, time_col='Timestamp', threshold_sec=2.0):
-    df = df.copy()
-    df[time_col] = pd.to_datetime(df[time_col])
-    df = df.sort_values(by=time_col).reset_index(drop=True)
-    df['TimeDiff'] = df[time_col].diff().dt.total_seconds()
-    gaps = df[df['TimeDiff'] > threshold_sec]
+def detect_outliers(hr_series, min_bpm=30, max_bpm=220):
 
-    gap_info = []
-    for idx, row in gaps.iterrows():
-        start_time = df.loc[idx - 1, time_col]
-        end_time = row[time_col]
-        duration = row['TimeDiff']
-        gap_info.append({
-            'Gap Start': start_time,
-            'Gap End': end_time,
-            'Gap Duration (seconds)': duration
-        })
+    total_outliers = ((hr_series < min_bpm) | (hr_series > max_bpm)).sum()
 
-    return pd.DataFrame(gap_info)
+    percentage_outliers = (
+        total_outliers / len(hr_series) * 100 if len(hr_series) > 0 else 0
+    )
+
+    return total_outliers, percentage_outliers
+
+def estimate_sampling_rate(df):
+    
+    diffs = df["Timestamp"].diff().dt.total_seconds().dropna()
+
+    if len(diffs) == 0:
+        return 1
+
+    median_interval = diffs.median()
+
+    if median_interval <= 0:
+        return 1
+
+    Fs = 1 / median_interval
+
+    return Fs
+
+def detect_flatlines(hr_series, window=10):
+
+    return hr_series.rolling(window).std() == 0
 
 
 def calculate_sample_rate_consistency(timestamps):
+
     if len(timestamps) < 2:
         return 0
-    timestamps_ns = timestamps.values.astype('datetime64[ns]').view('int64')
-    time_diffs = np.diff(timestamps_ns) / 1e9
-    median_interval = np.median(time_diffs)
-    if median_interval == 0:
+
+    timestamps_ns = timestamps.values.astype("datetime64[ns]").view("int64")
+
+    diffs = np.diff(timestamps_ns) / 1e9
+
+    median_interval = np.median(diffs)
+
+    if median_interval <= 0:
         return 1
-    std_dev = np.std(time_diffs)
+
+    std_dev = np.std(diffs)
+
     dev_ratio = std_dev / median_interval
+
     return min(dev_ratio, 1.0)
 
 
-def detect_outliers(hr_series, min_bpm=30, max_bpm=220):
-    total_outliers = ((hr_series < min_bpm) | (hr_series > max_bpm)).sum()
-    percentage_outliers = (total_outliers / hr_series.shape[0]) * 100
-    return total_outliers, percentage_outliers
-
-
-def detect_flatlines(hr_series, window=10):
-    return (hr_series.rolling(window).std() == 0).sum()
-
-
 def calculate_signal_quality(hr_series, timestamps):
+
     total = len(hr_series)
+
     outliers, percentage_outliers = detect_outliers(hr_series)
-    flatlines = detect_flatlines(hr_series)
+
+    flatline_mask = detect_flatlines(hr_series)
+
+    flatline_count = flatline_mask.sum()
+
+    flatline_percent = flatline_count / total * 100 if total > 0 else 0
+
+    diffs = timestamps.diff().dt.total_seconds().fillna(0)
+
+    flatline_duration = diffs[flatline_mask].sum()
+
     consistency_penalty = calculate_sample_rate_consistency(timestamps)
 
-    point_quality = 1 - (outliers + flatlines) / total
+    if total > 1:
+        duration = (timestamps.max() - timestamps.min()).total_seconds()
+
+        sample_rate_hz = total / duration if duration > 0 else 0
+
+    else:
+
+        sample_rate_hz = 0
+
+    point_quality = 1 - (outliers + flatline_count) / total if total > 0 else 0
+
     consistency_factor = 1 - consistency_penalty
+
     quality_score = point_quality * consistency_factor
 
     return {
         "percentage_outliers": percentage_outliers,
         "outliers": outliers,
-        "flatlines": flatlines,
+        "flatlines": flatline_count,
+        "flatline_percent": flatline_percent,
+        "flatline_duration_sec": flatline_duration,
+        "sample_rate_hz": sample_rate_hz,
         "sample_rate_penalty": consistency_penalty,
-        "quality_score": max(0, min(1, quality_score))
+        "sample_rate_consistency": consistency_factor,
+        "quality_score": max(0, min(1, quality_score)),
     }
 
 
-def clean_hr_signal(hr_series):
-    hr_series = pd.to_numeric(hr_series, errors='coerce')
-    hr_series = hr_series.interpolate(method='linear')
-    hr_series = hr_series.ffill().bfill()
-    hr_series = hr_series.round().astype(int)
-    return hr_series
+# ==========================================================
+# CLEAN HR
+# ==========================================================
+
+def clean_hr_signal(hr):
+
+    hr = pd.to_numeric(hr, errors="coerce")
+
+    hr = hr.interpolate()
+
+    hr = hr.ffill().bfill()
+
+    return hr.round().astype(int)
 
 
-def calculate_hr_zones(hr_series):
-    bins = [0, 40, 60, 80, 100, 120, 140, 160, 180, 200, np.inf]
+# ==========================================================
+# HR ZONES
+# ==========================================================
 
-    range_labels = [
+def calculate_hr_zones(hr):
+
+    bins = [0,40,60,80,100,120,140,160,180,200,np.inf]
+
+    labels = [
         "HR Range: 0–40 bpm",
         "HR Range: 40–60 bpm",
         "HR Range: 60–80 bpm",
@@ -95,213 +148,253 @@ def calculate_hr_zones(hr_series):
         "HR Range: 140–160 bpm",
         "HR Range: 160–180 bpm",
         "HR Range: 180–200 bpm",
-        "HR Range: >200 bpm"
+        "HR Range: >200 bpm",
     ]
 
-    hr_categorized = pd.cut(
-        hr_series,
-        bins=bins,
-        labels=range_labels,
-        include_lowest=True,
-        right=False
-    )
+    categorized = pd.cut(hr, bins=bins, labels=labels, include_lowest=True, right=False)
 
-    zone_counts = hr_categorized.value_counts().reindex(range_labels, fill_value=0)
-    return zone_counts.to_dict()
+    return categorized.value_counts().reindex(labels, fill_value=0).to_dict()
 
 
 # ==========================================================
-# ---------- PARTICIPANT ID PARSER ----------
+# TIMESTAMP NORMALIZATION
 # ==========================================================
 
-def extract_carewear_participant_id(file_name):
-    match = re.search(r'heart_rate_(\d+)_', file_name)
-    if match:
-        return int(match.group(1))
-    else:
-        raise ValueError(f"Could not extract participant ID from {file_name}")
+def normalize_timestamp(df):
+
+    for col in [
+        "Timestamp",
+        "datetime",
+        "timestamp",
+        "watch_timestamp",
+        "internal_ts",
+    ]:
+
+        if col in df.columns:
+
+            df["Timestamp"] = pd.to_datetime(df[col], errors="coerce")
+
+            return df
+
+    raise ValueError("No timestamp column detected")
 
 
 # ==========================================================
-# ---------- DATASET SELECTION ----------
+# HR COLUMN STANDARDIZATION
+# ==========================================================
+
+def standardize_hr_column(df):
+
+    for col in ["HeartRate", "hr", "bpm"]:
+
+        if col in df.columns:
+
+            df["HeartRate"] = df[col]
+
+            return df
+
+    raise ValueError("No HR column found")
+
+
+# ==========================================================
+# PARTICIPANT EXTRACTION
+# ==========================================================
+
+def extract_participant_id(file_name):
+    patterns = [
+        r"_hr_(\d+)",           # Updated CareWear pattern (matches _hr_5_)
+        r"heart_rate_(\d+)",    # Original CareWear/Generic
+        r"P(\d+)",              # GalaxyPPG
+        r"pid_(\d+)",           # Zenodo
+    ]
+
+    for p in patterns:
+        match = re.search(p, file_name)
+        if match:
+            return int(match.group(1))
+
+    return None
+
+# ==========================================================
+# SAMPLE-BASED WINDOWING
+# ==========================================================
+def sample_based_windowing(df, participant, activity, file_name,
+                           window_seconds, overlap_percent):
+
+    rows = []
+
+    df = df.sort_values("Timestamp").reset_index(drop=True)
+
+    Fs = estimate_sampling_rate(df)
+
+    samples_per_window = int(Fs * window_seconds)
+
+    if samples_per_window < 5:
+        samples_per_window = 5
+
+    step = int(samples_per_window * (1 - overlap_percent / 100))
+
+    start = 0
+    window_id = 0
+
+    while start + samples_per_window <= len(df):
+
+        window_df = df.iloc[start:start+samples_per_window]
+
+        hr = clean_hr_signal(window_df["HeartRate"])
+
+        report = calculate_signal_quality(hr, window_df["Timestamp"])
+
+        zones = calculate_hr_zones(hr)
+
+        row = {
+            "FileName": file_name,
+            "Participant": participant,
+            "Activity": activity,
+            "WindowNumber": window_id,
+            "WindowStart": window_df["Timestamp"].iloc[0],
+            "WindowEnd": window_df["Timestamp"].iloc[-1],
+            "Total Samples": len(window_df),
+        }
+
+        row.update(report)
+        row.update(zones)
+
+        rows.append(row)
+
+        window_id += 1
+
+        start += step
+
+    return rows
+# ==========================================================
+# MAIN
 # ==========================================================
 
 root = tk.Tk()
 root.withdraw()
 
-dataset_choice = simpledialog.askstring(
-    "Dataset Selection",
-    "Type dataset name:\n\n1 = CareWear\n2 = GalaxyPPG"
+dataset = simpledialog.askstring(
+    "Dataset",
+    "1 = CareWear\n2 = GalaxyPPG\n3 = Zenodo"
 )
 
-if dataset_choice not in ["1", "2"]:
-    raise Exception("Invalid selection. Exiting.")
+dataset_map = {"1":"CareWear","2":"GalaxyPPG","3":"Zenodo"}
 
-data_folder = filedialog.askdirectory(title="Select Dataset Root Folder")
+dataset_name = dataset_map.get(dataset,"Dataset")
+
+window_seconds = simpledialog.askinteger("Window","Seconds",initialvalue=2)
+
+overlap = simpledialog.askinteger("Overlap","%",initialvalue=50)
+
+data_folder = filedialog.askdirectory(title="Select dataset folder")
+
 root.destroy()
 
-if not data_folder:
-    raise Exception("No folder selected. Exiting script.")
+files = glob.glob(os.path.join(data_folder,"*.csv"))
 
+print("Files detected:",len(files))
 
-# ==========================================================
-# ---------- FILE PARSING ----------
-# ==========================================================
+all_rows = []
 
-if dataset_choice == "1":
-    file_pattern = os.path.join(data_folder, "heart_rate*.csv")
-    file_list = glob.glob(file_pattern)
-    dataset_type = "CareWear"
-else:
-    # Only search for CSVs inside GalaxyWatch subfolders
-    file_list = glob.glob(os.path.join(data_folder, "P*/GalaxyWatch/*.csv"), recursive=True)
-    dataset_type = "GalaxyPPG"
+for file_path in files:
 
+    file_name = os.path.basename(file_path)
 
-# ==========================================================
-# ---------- PROCESSING ----------
-# ==========================================================
+    if "label_mapping" in file_name:
+        continue
 
-expected_lables_list = [
-    'rest1', 'rest3', "stationary_Bike1",
-    'stationary_Bike2', 'prepare speech',
-    'rest2', 'give speech', 'mental math'
-]
-
-all_features = []
-
-for file_path in file_list:
     try:
-        file_name = os.path.basename(file_path)
 
-        if dataset_type == "CareWear":
-            participant_id = extract_carewear_participant_id(file_name)
-        else:
-            # ---------- GALAXYPPG PARTICIPANT PARSING ----------
-            # Extract participant ID from the parent folder of GalaxyWatch
-            participant_folder = os.path.dirname(os.path.dirname(file_path))  # .../P01/GalaxyWatch
-            participant_basename = os.path.basename(participant_folder)
-            match = re.match(r'P0*(\d+)', participant_basename, re.IGNORECASE)
-            if match:
-                participant_id = int(match.group(1))
-            else:
-                # Skip this file if participant folder does not match P<number>
-                print(f"Skipping file {file_path} because participant folder not found")
-                continue
+        df = pd.read_csv(file_path)
 
-        df_raw = pd.read_csv(file_path)
+        df = standardize_hr_column(df)
 
-        # -------- GalaxyPPG Handling --------
-        if dataset_type == "GalaxyPPG":
-            hr_cols = [c for c in df_raw.columns if "hr" in c.lower()]
-            if not hr_cols:
-                continue
+        df = normalize_timestamp(df)
 
-            df_raw["HeartRate"] = df_raw[hr_cols[0]]
+        df = df.dropna(subset=["Timestamp","HeartRate"])
 
-            if "Timestamp" not in df_raw.columns:
-                start_time = datetime.now()
-                df_raw["Timestamp"] = [
-                    start_time + timedelta(seconds=i)
-                    for i in range(len(df_raw))
-                ]
+        participant = extract_participant_id(file_name)
 
-        df_raw['Timestamp'] = pd.to_datetime(df_raw['Timestamp'], errors='coerce')
-        df_raw = df_raw.dropna(subset=['Timestamp'])
+        if participant is None:
+            print("Participant not found:",file_name)
+            continue
 
-        # ======================================================
-        # ---------------- CAREWEAR FULL LOGIC -----------------
-        # ======================================================
-        if dataset_type == "CareWear":
+        activity_col = None
 
-            df = df_raw[df_raw['manual_labels_activity'].isin(expected_lables_list)]
+        for c in [
+            "manual_labels_activity",
+            "activity",
+            "label",
+            "segment",
+            "int_session",
+        ]:
+            if c in df.columns:
+                activity_col = c
+                break
 
-            hr_clean = clean_hr_signal(df["HeartRate"])
-            report = calculate_signal_quality(hr_clean, df["Timestamp"])
-            hr_zone_counts = calculate_hr_zones(hr_clean)
+        if activity_col:
 
-            feature_row = {
-                "FileName": file_name,
-                "Participant": participant_id,
-                "Activity": "Overall",
-                "Total Samples": len(df),
-                "Outliers": report["outliers"],
-                "Percentage Outliers": report["percentage_outliers"],
-                "Flatlines": report["flatlines"],
-                "Sample Rate Penalty": report["sample_rate_penalty"],
-                "Quality Score": report["quality_score"]
-            }
+            for act,g in df.groupby(activity_col):
 
-            feature_row.update(hr_zone_counts)
-            all_features.append(feature_row)
+                rows = sample_based_windowing(
+                    g,
+                    participant,
+                    act,
+                    file_name,
+                    window_seconds,
+                    overlap,
+                )
 
-            for activity in expected_lables_list:
-                df_activity = df[df['manual_labels_activity'] == activity]
-                if df_activity.empty:
-                    continue
+                all_rows.extend(rows)
 
-                hr_clean_a = clean_hr_signal(df_activity["HeartRate"])
-                report_a = calculate_signal_quality(hr_clean_a, df_activity["Timestamp"])
-                hr_zone_counts_a = calculate_hr_zones(hr_clean_a)
-
-                feature_row_a = {
-                    "FileName": file_name,
-                    "Participant": participant_id,
-                    "Activity": activity,
-                    "Total Samples": len(df_activity),
-                    "Outliers": report_a["outliers"],
-                    "Percentage Outliers": report_a["percentage_outliers"],
-                    "Flatlines": report_a["flatlines"],
-                    "Sample Rate Penalty": report_a["sample_rate_penalty"],
-                    "Quality Score": report_a["quality_score"]
-                }
-
-                feature_row_a.update(hr_zone_counts_a)
-                all_features.append(feature_row_a)
-
-        # ======================================================
-        # ---------------- GALAXYPPG ---------------------------
-        # ======================================================
         else:
 
-            df = df_raw.copy()
-            hr_clean = clean_hr_signal(df["HeartRate"])
-            report = calculate_signal_quality(hr_clean, df["Timestamp"])
-            hr_zone_counts = calculate_hr_zones(hr_clean)
+            rows = sample_based_windowing(
+                df,
+                participant,
+                "Overall",
+                file_name,
+                window_seconds,
+                overlap,
+            )
+            all_rows.extend(rows)
 
-            feature_row = {
-                "FileName": file_name,
-                "Participant": participant_id,
-                "Activity": "Overall",
-                "Total Samples": len(df),
-                "Outliers": report["outliers"],
-                "Percentage Outliers": report["percentage_outliers"],
-                "Flatlines": report["flatlines"],
-                "Sample Rate Penalty": report["sample_rate_penalty"],
-                "Quality Score": report["quality_score"]
-            }
-
-            feature_row.update(hr_zone_counts)
-            all_features.append(feature_row)
+        print("Processed:",file_name)
 
     except Exception as e:
-        print(f"Error processing {file_path}: {e}")
+
+        print("Error:",file_name,e)
 
 
 # ==========================================================
-# ---------- SAVE OUTPUT ----------
+# SAVE
 # ==========================================================
 
-output_folder = os.path.join(data_folder, "quality_reports")
-os.makedirs(output_folder, exist_ok=True)
+output_folder = os.path.join(data_folder,"quality_reports")
 
-features_df = pd.DataFrame(all_features)
-features_df.sort_values(["Participant", "Activity"], inplace=True)
+os.makedirs(output_folder,exist_ok=True)
 
-features_df.to_csv(
-    os.path.join(output_folder, "heart_rate_quality_features.csv"),
-    index=False
-)
+features = pd.DataFrame(all_rows)
 
-print(f"\nProcessing complete for {dataset_type}.")
-print("Feature reports saved successfully.")
+if len(features) == 0:
+
+    print("No data generated")
+
+    exit()
+
+features.sort_values(["Participant","Activity"],inplace=True)
+
+output_file = f"{dataset_name}_heart_rate_quality_features_{window_seconds}s_{overlap}overlap.csv"
+
+features.to_csv(os.path.join(output_folder,output_file),index=False)
+
+print("\n==============================")
+
+print("Rows generated:",len(features))
+
+print("Unique participants:",features["Participant"].nunique())
+
+print("Saved file:",output_file)
+
+print("==============================")
