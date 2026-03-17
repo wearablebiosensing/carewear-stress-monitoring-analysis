@@ -54,10 +54,10 @@ def chunk_data():
                 # Clean column names
                 df.columns = [c.strip() for c in df.columns]
 
-                if 'activity_int' in df.columns:
+                if 'activity_int_merged' in df.columns:
                     file_count += 1
                     # Group by activity_int since PID is constant for this whole file
-                    grouped = df.groupby('activity_int')
+                    grouped = df.groupby('activity_int_merged')
 
                     for activity, group_data in grouped:
                         # Final Naming: activity_id_1.0_hr_(PID - 1)_merged_labels.csv
@@ -65,7 +65,7 @@ def chunk_data():
                         output_path = os.path.join(OUTPUT_BASE_DIR, active_sensor, new_filename)
                         group_data.to_csv(output_path, index=False)
                 else:
-                    print(f"  ! Skipping: Missing 'activity_int'. Found: {list(df.columns)}")
+                    print(f"  ! Skipping: Missing 'activity_int_merged'. Found: {list(df.columns)}")
             
             except Exception as e:
                 print(f"  ! Error reading {file_path.name}: {e}")

@@ -4,7 +4,7 @@ import os
 import argparse
 
 # -------------------------------------------------
-# CONFIGURATION
+# CONFIGURATION 
 # -------------------------------------------------
 root = "/Volumes/ss/Project_CareWear/DATASET/ss_drive"
 INPUT_DIR = os.path.join(root, "2_Concat_File/hr")
