@@ -177,7 +177,7 @@ def main():
         os.makedirs(output_folder, exist_ok=True)
         
         output_df.to_csv(os.path.join(output_folder, f"{dataset_name}_Features_{window_sec}s_{overlap_pct}.csv"), index=False)
-        generate_activity_summary(output_df, os.path.join(output_folder, f"{dataset_name}_Activity_Summary__{window_sec}s_{overlap_pct}.csv"))
+        generate_activity_summary(output_df, os.path.join(output_folder, f"{dataset_name}_Activity_Summary_{window_sec}s_{overlap_pct}.csv"))
         
         print(f"\nSUCCESS: Features saved to {output_folder}")
     else:
