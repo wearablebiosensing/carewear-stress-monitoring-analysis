@@ -36,17 +36,38 @@ def generate_activity_summary(df, output_path):
         print(f"Activity summary table saved to: {output_path}")
 
 # ----------------- FEATURE MATH -----------------
+def calculate_hr_zones(hr):
+    bins = [0, 40, 60, 80, 100, 120, 140, 160, 180, 200, np.inf]
+    labels = [
+        "HR Range: 0–40 bpm",
+        "HR Range: 40–60 bpm",
+        "HR Range: 60–80 bpm",
+        "HR Range: 80–100 bpm",
+        "HR Range: 100–120 bpm",
+        "HR Range: 120–140 bpm",
+        "HR Range: 140–160 bpm",
+        "HR Range: 160–180 bpm",
+        "HR Range: 180–200 bpm",
+        "HR Range: >200 bpm",
+    ]
+    categorized = pd.cut(hr, bins=bins, labels=labels, include_lowest=True, right=False)
+    return categorized.value_counts().reindex(labels, fill_value=0).to_dict()
+
 def extract_features(hr_series):
     hr_series = np.array(hr_series, dtype=np.float64)
     valid_mask = (hr_series > 30) & (hr_series < 220) & (~np.isnan(hr_series))
     hr_series_valid = hr_series[valid_mask]
     
     if len(hr_series_valid) < 2:
-        return {k: np.nan for k in [
+        nan_features = {k: np.nan for k in [
             'hr_mean', 'hr_median', 'hr_std', 'hr_min', 'hr_max', 'hr_iqr',
             'hr_skew', 'hr_kurtosis', 'hr_rmssd', 'hr_pnn50', 'hr_range',
             'hr_slope', 'hr_start', 'hr_end'
         ]}
+        empty_zones = calculate_hr_zones([])
+        for k in empty_zones.keys():
+            nan_features[k] = np.nan
+        return nan_features
 
     hr_diff = np.diff(hr_series_valid)
     rmssd = np.sqrt(np.mean(hr_diff ** 2)) if len(hr_diff) > 0 else np.nan
@@ -67,7 +88,7 @@ def extract_features(hr_series):
     except:
         slope = np.nan
 
-    return {
+    features = {
         'hr_mean': np.nanmean(hr_series_valid),
         'hr_median': np.nanmedian(hr_series_valid),
         'hr_std': np.nanstd(hr_series_valid),
@@ -83,6 +104,10 @@ def extract_features(hr_series):
         'hr_start': hr_series_valid[0], 
         'hr_end': hr_series_valid[-1]
     }
+    
+    features.update(calculate_hr_zones(hr_series_valid))
+    
+    return features
 
 # ----------------- HELPERS -----------------
 def get_sampling_rate(df):

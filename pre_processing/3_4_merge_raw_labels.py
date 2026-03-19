@@ -7,12 +7,23 @@ import argparse
 # CONFIGURATION 
 # -------------------------------------------------
 root = "/Volumes/ss/Project_CareWear/DATASET/ss_drive"
-INPUT_DIR = os.path.join(root, "2_Concat_File/hr")
 OUTPUT_DIR = os.path.join(root, "4_merged_lables")
 MANUAL_LABELS_DIR = os.path.join(root, "3_task_timeline/Task_Time_Line_Manual")
 BELT_LABELS_DIR = os.path.join(root, "3_task_timeline/Task_Time_Line_Belt")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def get_input_dir(file_type):
+    if file_type == "heart_rate":
+        return os.path.join(root, "2_Concat_File/hr")
+    elif file_type == "acc":
+        return os.path.join(root, "2_Concat_File/acc")
+    elif file_type == "gry":
+        return os.path.join(root, "2_Concat_File/gry")
+    elif file_type == "biopac":
+        return os.path.join(root, "2_Concat_File/biopac")
+    else:
+        raise ValueError(f"Unknown file type: {file_type}")
 
 # -------------------------------------------------
 # CANONICAL ACTIVITY NORMALIZATION
@@ -114,19 +125,41 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--file_type", default="heart_rate", choices=["biopac","heart_rate","acc","gry"])
     parser.add_argument("--labels_dir", default="manual", choices=["manual","belt"])
+    parser.add_argument("--pid", help="If provided, only process this participant ID (e.g. 1)")
     args = parser.parse_args()
 
-    pattern = os.path.join(INPUT_DIR, f"{args.file_type}_P*.csv")
+    input_dir = get_input_dir(args.file_type)
+    pattern = os.path.join(input_dir, f"{args.file_type}_P*.csv")
     files = sorted(glob.glob(pattern))
+
+    if not files:
+        print(f"No files found for {args.file_type} in {input_dir}")
+        exit()
 
     for file_path in files:
         fname = os.path.basename(file_path)
         pid = fname.split("_P")[-1].split(".csv")[0]
         
-        print(f"\n--- Processing P{pid} ---")
+        if args.pid and str(pid) != str(args.pid):
+            continue
+        
+        print(f"\n--- Processing P{pid} ({args.file_type}) ---")
 
         df_raw = pd.read_csv(file_path, low_memory=False)
-        df_raw["Timestamp_pd"] = pd.to_datetime(df_raw["Timestamp_pd"], errors="coerce")
+        
+        # Ensure Timestamp_pd exists
+        if "Timestamp_pd" not in df_raw.columns:
+            if "date_time" in df_raw.columns:
+                print(f"Converting 'date_time' to 'Timestamp_pd'...")
+                df_raw["Timestamp_pd"] = pd.to_datetime(df_raw["date_time"], errors="coerce")
+            elif "Timestamp" in df_raw.columns:
+                print(f"Using 'Timestamp' as 'Timestamp_pd'...")
+                df_raw["Timestamp_pd"] = pd.to_datetime(df_raw["Timestamp"], errors="coerce")
+            else:
+                print(f"Warning: No timestamp column found in {fname}")
+                continue
+        else:
+            df_raw["Timestamp_pd"] = pd.to_datetime(df_raw["Timestamp_pd"], errors="coerce")
 
         if args.labels_dir == "manual":
             labels_path = os.path.join(MANUAL_LABELS_DIR, f"manual_task_timeline_P{pid}.csv")
@@ -173,3 +206,6 @@ if __name__ == "__main__":
         if unique_labels_found < 8:
             found_list = sorted(df_merged[df_merged["activity_int_merged"] != -1]["activity_int_merged"].unique().tolist())
             print(f"Missing Label IDs: {set(range(1, 9)) - set(found_list)}")
+
+
+    
