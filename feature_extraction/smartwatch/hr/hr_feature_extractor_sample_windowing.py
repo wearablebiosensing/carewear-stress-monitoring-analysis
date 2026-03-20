@@ -48,8 +48,7 @@ def calculate_hr_zones(hr):
         "HR Range: 140–160 bpm",
         "HR Range: 160–180 bpm",
         "HR Range: 180–200 bpm",
-        "HR Range: >200 bpm",
-    ]
+        "HR Range: >200 bpm",]
     categorized = pd.cut(hr, bins=bins, labels=labels, include_lowest=True, right=False)
     return categorized.value_counts().reindex(labels, fill_value=0).to_dict()
 
