@@ -24,13 +24,17 @@ def get_user_inputs():
     dataset_map = {"1": "CareWear", "2": "GalaxyPPG", "3": "Zenodo"}
     dataset_name = dataset_map.get(dataset_idx, "Dataset")
 
+    device_idx = simpledialog.askstring("Device", "1=Galaxy Watch, 2=Empatica E4, 3=Polar H10, 4=Other")
+    device_map = {"1": "GalaxyWatch", "2": "EmpaticaE4", "3": "PolarH10", "4": "Other"}
+    device_name = device_map.get(device_idx, "UnknownDevice")
+
     window_sec = simpledialog.askinteger("Window", "Seconds (e.g. 5):", initialvalue=5)
     overlap_pct = simpledialog.askinteger("Overlap", "Overlap % (0-99):", initialvalue=50)
     
     data_folder = filedialog.askdirectory(title="Select Input Accelerometer Data Folder")
     
     root.destroy()
-    return dataset_name, window_sec, overlap_pct, data_folder
+    return dataset_name, device_name, window_sec, overlap_pct, data_folder
 
 # ----------------- FILTERING MODULE -----------------
 def moving_average(X, window_size):
@@ -54,10 +58,10 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     y = lfilter(b, a, data)
     return y
 
-def process_filter_code(data_array, Fs, window, low=1, high=5):
-    # 1) DETREND
+def process_filter_code(data_array, Fs, window, low=0.1, high=5):
+    # 1) DETREND (removes DC / Gravity)
     detrended_signal = signal.detrend(data_array)
-    # 2) BAND PASS 1-5 Hz (handles cases where Fs isn't sufficient for the specified high cut)
+    # 2) BAND PASS 0.1-5 Hz (handles low-frequency fidgeting while keeping out DC)
     band_pass_filtered = butter_bandpass_filter(detrended_signal, low, high, Fs, order=5)
     # 3) MOVING AVERAGE
     mov_average_filt = moving_average(band_pass_filtered.tolist(), window)
@@ -182,7 +186,7 @@ def generate_activity_summary(df, output_path):
 
 # ----------------- MAIN PIPELINE -----------------
 def main():
-    dataset_name, window_sec, overlap_pct, data_folder = get_user_inputs()
+    dataset_name, device_name, window_sec, overlap_pct, data_folder = get_user_inputs()
     if not data_folder: return
 
     files = glob.glob(os.path.join(data_folder, "*.csv"))
@@ -225,8 +229,15 @@ def main():
             
             # Timestamp Conversion
             if pd.api.types.is_numeric_dtype(df['Timestamp_pd']):
-                is_ms = df['Timestamp_pd'].max() > 1e12
-                df['Timestamp_pd'] = pd.to_datetime(df['Timestamp_pd'], unit='ms' if is_ms else 's', errors='coerce')
+                max_ts = df['Timestamp_pd'].max()
+                if max_ts > 1e16: # likely nanoseconds (19 digits)
+                    df['Timestamp_pd'] = pd.to_datetime(df['Timestamp_pd'], unit='ns', errors='coerce')
+                elif max_ts > 1e14: # likely microseconds (16 digits)
+                    df['Timestamp_pd'] = pd.to_datetime(df['Timestamp_pd'], unit='us', errors='coerce')
+                elif max_ts > 1e11: # likely milliseconds (13 digits)
+                    df['Timestamp_pd'] = pd.to_datetime(df['Timestamp_pd'], unit='ms', errors='coerce')
+                else: # likely seconds
+                    df['Timestamp_pd'] = pd.to_datetime(df['Timestamp_pd'], unit='s', errors='coerce')
             else:
                 df['Timestamp_pd'] = pd.to_datetime(df['Timestamp_pd'], errors='coerce')
 
@@ -237,6 +248,21 @@ def main():
             for col in ['x', 'y', 'z']:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
             
+            # --- UNIT CONVERSION PIPELINE (Standardize to g) ---
+            # Galaxy Watch: m/s^2 -> g
+            if device_name == "GalaxyWatch":
+                for col in ['x', 'y', 'z']:
+                    df[col] = df[col] / 9.81
+            # Empatica E4: 1/64 g -> g
+            elif device_name == "EmpaticaE4":
+                for col in ['x', 'y', 'z']:
+                    df[col] = df[col] / 64.0
+            # Polar H10: mg -> g
+            elif device_name == "PolarH10":
+                for col in ['x', 'y', 'z']:
+                    df[col] = df[col] / 1000.0
+            # ---------------------------------------------------
+
             # Second dropna in case strings were coerced to NaNs
             df = df.dropna(subset=['x', 'y', 'z']).reset_index(drop=True)
             if len(df) < 2: continue
@@ -269,6 +295,7 @@ def main():
                     "Participant": participant_id,
                     "ActivityID_FileName": activity_id,
                     "Activity_Int": act_int,
+                    "Device": device_name,
                     "Fs": round(fs, 2),
                     "StartTime": window_df['Timestamp_pd'].iloc[0]
                 })
@@ -287,10 +314,10 @@ def main():
         output_folder = os.path.join(data_folder, "extracted_features")
         os.makedirs(output_folder, exist_ok=True)
         
-        output_csv_path = os.path.join(output_folder, f"{dataset_name}_AccFeatures_{window_sec}s_{overlap_pct}.csv")
+        output_csv_path = os.path.join(output_folder, f"{dataset_name}_{device_name}_AccFeatures_{window_sec}s_{overlap_pct}.csv")
         output_df.to_csv(output_csv_path, index=False)
         
-        summary_csv_path = os.path.join(output_folder, f"{dataset_name}_AccActivity_Summary_{window_sec}s_{overlap_pct}.csv")
+        summary_csv_path = os.path.join(output_folder, f"{dataset_name}_{device_name}_AccActivity_Summary_{window_sec}s_{overlap_pct}.csv")
         generate_activity_summary(output_df, summary_csv_path)
         
         print(f"\nSUCCESS: Acc Features saved to {output_folder}")

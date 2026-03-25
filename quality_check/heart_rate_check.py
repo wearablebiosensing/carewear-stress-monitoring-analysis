@@ -161,21 +161,29 @@ def calculate_hr_zones(hr):
 # ==========================================================
 
 def normalize_timestamp(df):
-
     for col in [
         "Timestamp",
         "datetime",
         "timestamp",
         "watch_timestamp",
         "internal_ts",
+        "Timestamp_pd",
     ]:
-
         if col in df.columns:
-
-            df["Timestamp"] = pd.to_datetime(df[col], errors="coerce")
-
+            # Check if it's large integers (likely microseconds or milliseconds)
+            if df[col].dtype in [np.int64, np.float64]:
+                max_val = df[col].max()
+                # 1.7e15 is microseconds (around 2024)
+                if max_val > 1e14:
+                    df["Timestamp"] = pd.to_datetime(df[col], unit='us', errors="coerce")
+                # 1.7e12 is milliseconds
+                elif max_val > 1e11:
+                    df["Timestamp"] = pd.to_datetime(df[col], unit='ms', errors="coerce")
+                else:
+                    df["Timestamp"] = pd.to_datetime(df[col], unit='s', errors="coerce")
+            else:
+                df["Timestamp"] = pd.to_datetime(df[col], errors="coerce")
             return df
-
     raise ValueError("No timestamp column detected")
 
 
@@ -185,15 +193,31 @@ def normalize_timestamp(df):
 
 def standardize_hr_column(df):
 
-    for col in ["HeartRate", "hr", "bpm"]:
-
+    hr_cols = ["HeartRate", "hr","bpm", "Heart Rate", "heart rate", "event", "value","heart_rate"]
+    
+    # 1. Try exact matches first
+    for col in hr_cols:
         if col in df.columns:
-
             df["HeartRate"] = df[col]
-
             return df
+            
+    # 2. Try case-insensitive and stripped matches for common HR column names
+    cols_map = {c.lower().strip(): c for c in df.columns}
+    for target in hr_cols:
+        target_lower = target.lower().strip()
+        if target_lower in cols_map:
+            df["HeartRate"] = df[cols_map[target_lower]]
+            return df
+            
+    # 3. Fallback: Search for any column that contains "heart" or "hr" but is NOT a timestamp or label
+    for c in df.columns:
+        c_low = c.lower().strip()
+        if ("heart" in c_low or "hr" in c_low) and ("time" not in c_low) and ("label" not in c_low):
+             print(f"Detected potential HR column: {c}")
+             df["HeartRate"] = df[c]
+             return df
 
-    raise ValueError("No HR column found")
+    raise ValueError(f"No HR column found (Looked for: {hr_cols})")
 
 
 # ==========================================================
@@ -204,6 +228,8 @@ def extract_participant_id(file_name):
     patterns = [
         r"_hr_(\d+)",           # Updated CareWear pattern (matches _hr_5_)
         r"heart_rate_(\d+)",    # Original CareWear/Generic
+        r"biopac_(\d+)",        # Biopac merged
+        r"belt_(\d+)",          # Belt merged
         r"P(\d+)",              # GalaxyPPG
         r"pid_(\d+)",           # Zenodo
     ]
@@ -226,6 +252,10 @@ def sample_based_windowing(df, participant, activity, file_name,
     df = df.sort_values("Timestamp").reset_index(drop=True)
 
     Fs = estimate_sampling_rate(df)
+    
+    # Fallback to manual_fs if estimation fails (e.g. no Timestamp)
+    if (Fs == 1) and ("manual_fs" in globals()) and (manual_fs is not None):
+        Fs = manual_fs
 
     samples_per_window = int(Fs * window_seconds)
 
@@ -269,132 +299,150 @@ def sample_based_windowing(df, participant, activity, file_name,
     return rows
 # ==========================================================
 # MAIN
-# ==========================================================
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.withdraw()
 
-root = tk.Tk()
-root.withdraw()
+    dataset = simpledialog.askstring(
+        "Dataset",
+        "1 = CareWear\n2 = GalaxyPPG\n3 = Zenodo"
+    )
 
-dataset = simpledialog.askstring(
-    "Dataset",
-    "1 = CareWear\n2 = GalaxyPPG\n3 = Zenodo"
-)
+    dataset_map = {"1":"CareWear","2":"GalaxyPPG","3":"Zenodo"}
 
-dataset_map = {"1":"CareWear","2":"GalaxyPPG","3":"Zenodo"}
+    dataset_name = dataset_map.get(dataset,"Dataset")
 
-dataset_name = dataset_map.get(dataset,"Dataset")
+    window_seconds = simpledialog.askinteger("Window","Seconds",initialvalue=2)
 
-window_seconds = simpledialog.askinteger("Window","Seconds",initialvalue=2)
+    overlap = simpledialog.askinteger("Overlap","%",initialvalue=50)
 
-overlap = simpledialog.askinteger("Overlap","%",initialvalue=50)
+    manual_fs = None # Will prompt if needed below
 
-data_folder = filedialog.askdirectory(title="Select dataset folder")
+    data_folder = filedialog.askdirectory(title="Select dataset folder")
 
-root.destroy()
+    root.destroy()
 
-files = glob.glob(os.path.join(data_folder,"*.csv"))
+    files = glob.glob(os.path.join(data_folder,"*.csv"))
 
-print("Files detected:",len(files))
+    print("Files detected:",len(files))
 
-all_rows = []
+    all_rows = []
 
-for file_path in files:
+    for file_path in files:
 
-    file_name = os.path.basename(file_path)
+        file_name = os.path.basename(file_path)
 
-    if "label_mapping" in file_name:
-        continue
-
-    try:
-
-        df = pd.read_csv(file_path)
-
-        df = standardize_hr_column(df)
-
-        df = normalize_timestamp(df)
-
-        df = df.dropna(subset=["Timestamp","HeartRate"])
-
-        participant = extract_participant_id(file_name)
-
-        if participant is None:
-            print("Participant not found:",file_name)
+        if "label_mapping" in file_name:
             continue
 
-        activity_col = None
+        try:
 
-        for c in [
-            "manual_labels_activity",
-            "activity",
-            "label",
-            "segment",
-            "int_session",
-        ]:
-            if c in df.columns:
-                activity_col = c
-                break
+            df = pd.read_csv(file_path)
 
-        if activity_col:
+            df = standardize_hr_column(df)
 
-            for act,g in df.groupby(activity_col):
+            try:
+                df = normalize_timestamp(df)
+            except ValueError:
+                # If no timestamp, we need manual_fs
+                if manual_fs is None:
+                    root = tk.Tk()
+                    root.withdraw()
+                    manual_fs = simpledialog.askinteger("Input", f"No timestamp in {file_name}. Enter Manual Fs (Hz):", initialvalue=1)
+                    root.destroy()
+                
+                if "sample_number" in df.columns:
+                    print(f"No timestamp in {file_name}, using 'sample_number' with Fs: {manual_fs}")
+                    df["Timestamp"] = pd.to_datetime("1970-01-01") + pd.to_timedelta(df["sample_number"] / manual_fs, unit="s")
+                else:
+                    print(f"No timestamp or sample_number in {file_name}. Using row index with Fs: {manual_fs}")
+                    df["Timestamp"] = pd.to_datetime("1970-01-01") + pd.to_timedelta(df.index / manual_fs, unit="s")
+
+            df = df.dropna(subset=["HeartRate"])
+
+            participant = extract_participant_id(file_name)
+
+            if participant is None:
+                print("Participant not found:",file_name)
+                continue
+
+            activity_col = None
+
+            for c in [
+                "activity_int_merged",
+                "activity_merged",
+                "manual_labels_activity",
+                "activity",
+                "label",
+                "segment",
+                "int_session",
+            ]:
+                if c in df.columns:
+                    activity_col = c
+                    break
+
+            if activity_col:
+
+                for act,g in df.groupby(activity_col):
+
+                    rows = sample_based_windowing(
+                        g,
+                        participant,
+                        act,
+                        file_name,
+                        window_seconds,
+                        overlap,
+                    )
+
+                    all_rows.extend(rows)
+
+            else:
 
                 rows = sample_based_windowing(
-                    g,
+                    df,
                     participant,
-                    act,
+                    "Overall",
                     file_name,
                     window_seconds,
                     overlap,
                 )
-
                 all_rows.extend(rows)
 
-        else:
+            print("Processed:",file_name)
 
-            rows = sample_based_windowing(
-                df,
-                participant,
-                "Overall",
-                file_name,
-                window_seconds,
-                overlap,
-            )
-            all_rows.extend(rows)
+        except Exception as e:
 
-        print("Processed:",file_name)
-
-    except Exception as e:
-
-        print("Error:",file_name,e)
+            print("Error:",file_name,e)
 
 
-# ==========================================================
-# SAVE
-# ==========================================================
+    # ==========================================================
+    # SAVE
+    # ==========================================================
 
-output_folder = os.path.join(data_folder,"quality_reports")
+    output_folder = os.path.join(data_folder,"quality_reports")
 
-os.makedirs(output_folder,exist_ok=True)
+    os.makedirs(output_folder,exist_ok=True)
 
-features = pd.DataFrame(all_rows)
+    features = pd.DataFrame(all_rows)
 
-if len(features) == 0:
+    if len(features) == 0:
 
-    print("No data generated")
+        print("No data generated")
 
-    exit()
+        exit()
 
-features.sort_values(["Participant","Activity"],inplace=True)
+    features.sort_values(["Participant","Activity"],inplace=True)
 
-output_file = f"{dataset_name}_heart_rate_quality_features_{window_seconds}s_{overlap}overlap.csv"
+    output_file = f"{dataset_name}_heart_rate_quality_features_{window_seconds}s_{overlap}overlap.csv"
 
-features.to_csv(os.path.join(output_folder,output_file),index=False)
+    features.to_csv(os.path.join(output_folder,output_file),index=False)
 
-print("\n==============================")
+    print("\n==============================")
 
-print("Rows generated:",len(features))
+    print("Rows generated:",len(features))
 
-print("Unique participants:",features["Participant"].nunique())
+    print("Unique participants:",features["Participant"].nunique())
 
-print("Saved file:",output_file)
+    print("Saved file:",output_file)
 
-print("==============================")
+    print("==============================")
