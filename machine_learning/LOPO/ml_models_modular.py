@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import numpy as np
 import pandas as pd
 import traceback
@@ -127,10 +128,12 @@ def run_lopo_pipeline(
                 scoring="balanced_accuracy", n_jobs=-1
             )
             
+            start_time = time.time()
             if isinstance(inner_cv, GroupKFold):
                 grid.fit(X_train, y_train, groups=groups_train)
             else:
                 grid.fit(X_train, y_train)
+            train_time = time.time() - start_time
             
             y_pred = grid.best_estimator_.predict(X_test)
             metrics = compute_metrics(y_test, y_pred)
@@ -144,6 +147,7 @@ def run_lopo_pipeline(
                 "f1_score": metrics['f1_score'],
                 "sensitivity": metrics['sensitivity'],
                 "specificity": metrics['specificity'],
+                "training_time": train_time,
                 "features_used": feature_list_str
             }
             results.append(row)

@@ -109,6 +109,7 @@ def start_experiment():
     print(f"[MODELS] {', '.join(models_to_run)}")
     
     success_models = []
+    all_time_results = []
     
     # 5. Execute Loop over Models
     for model_name in models_to_run:
@@ -131,6 +132,9 @@ def start_experiment():
                 save_dir=model_results_dir,
                 file_prefix=base_filename
             )
+            results['model'] = model_name
+            if 'training_time' in results.columns:
+                all_time_results.append(results[['model', 'participant', 'training_time']])
             success_models.append(model_name)
             
         except Exception as e:
@@ -139,6 +143,12 @@ def start_experiment():
             traceback.print_exc()
             print("!"*60)
             
+    if all_time_results:
+        summary_time_df = pd.concat(all_time_results, ignore_index=True)
+        time_summary_path = source_dir / f"{base_filename}_training_times_summary.csv"
+        summary_time_df.to_csv(time_summary_path, index=False)
+        print(f"\n[INFO] Saved Unified Training Time Summary to: {time_summary_path}")
+
     if success_models:
         print(f"\n[SUCCESS] Benchmarks finished for: {', '.join(success_models)}")
         messagebox.showinfo(
