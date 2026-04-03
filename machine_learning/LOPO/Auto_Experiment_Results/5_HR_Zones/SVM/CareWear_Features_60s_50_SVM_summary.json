@@ -1,0 +1,11 @@
+{
+    "participant": 15.413793103448276,
+    "train_samples": 16299.862068965518,
+    "test_samples": 582.1379310344828,
+    "accuracy": 0.45653638415335424,
+    "balanced_accuracy": 0.4567708326966196,
+    "f1_score": 0.35513267203612914,
+    "sensitivity": 0.4471405708744818,
+    "specificity": 0.6818538438760737,
+    "training_time": 23.414232221143
+}

@@ -1,0 +1,4 @@
+'hr_range',
+       'hr_slope', 'hr_start', 'hr_end', 'hr_sdsd', 'hr_sampen',
+       'hr_second_derivative', 'hr_delta', 'hr_perc', 'hr_recovery_window_1',
+       'hr_recovery_window_2', 'hr_macd_mean',

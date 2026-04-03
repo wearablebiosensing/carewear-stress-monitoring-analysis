@@ -4,6 +4,7 @@ import time
 import numpy as np
 import pandas as pd
 import traceback
+import joblib
 from sklearn.model_selection import StratifiedKFold, GridSearchCV, GroupKFold
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, balanced_accuracy_score, recall_score
@@ -176,5 +177,47 @@ def run_lopo_pipeline(
         print(f"[SUCCESS] {model_name} Summary JSON written: {summary_path}\n")
     except Exception as e:
         print(f"[ERROR] Final summary calculation failed for {model_name}: {e}\n")
+
+    # Train and save final deployment model on all data
+    print(f"--- Training Final Deployment Model ---")
+    try:
+        X_all, y_all = df[feature_cols], df['target']
+        pipeline_steps = [
+            ('imputer', SimpleImputer(strategy="median")),
+            ('scaler', StandardScaler() if scaling_method == "Standard" else MinMaxScaler())
+        ]
+        
+        if undersample_method == "Rus":
+            pipeline_steps.append(('sampler', RandomUnderSampler(random_state=42)))
+        elif undersample_method == "Cc":
+            pipeline_steps.append(('sampler', ClusterCentroids(random_state=42)))
+            
+        estimator, param_grid = get_model_and_grid(model_name)
+        pipeline_steps.append(('model', estimator))
+        pipeline = ImbPipeline(pipeline_steps)
+        
+        n_groups = df[id_col].nunique()
+        n_splits = min(3, n_groups) if n_groups > 0 else 3
+        inner_cv = GroupKFold(n_splits=n_splits) if n_splits >= 2 else 2
+        
+        grid = GridSearchCV(
+            pipeline,
+            param_grid,
+            cv=inner_cv,
+            scoring="balanced_accuracy", n_jobs=-1
+        )
+        
+        if isinstance(inner_cv, GroupKFold):
+            grid.fit(X_all, y_all, groups=df[id_col])
+        else:
+            grid.fit(X_all, y_all)
+            
+        full_model = grid.best_estimator_
+        model_path = os.path.join(save_dir, f"{file_prefix}_{model_name}_deploy_model.pkl")
+        joblib.dump(full_model, model_path)
+        print(f"[SUCCESS] Final deploy model saved: {model_path}\n")
+    except Exception as e:
+        print(f"[ERROR] Final model training failed for {model_name}: {e}\n")
+        traceback.print_exc()
 
     return pd.DataFrame(results), summary
