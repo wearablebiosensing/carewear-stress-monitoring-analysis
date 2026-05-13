@@ -19,6 +19,67 @@ python3 visualizer_dash_raw.py
 
 ---
 
+## How-To Guide
+
+This guide outlines the steps to extract features from raw wearable data and run machine learning benchmarking.
+
+### Phase 1: Feature Extraction
+Before running ML models, you must extract statistical and physiological features from the raw data chunks.
+
+#### 1. Extract Accelerometer (ACC) Features
+- **Script:** `feature_extraction/smartwatch/acc/acc_watch_feature_extractor.py`
+- **Execution:**
+  ```bash
+  python3 feature_extraction/smartwatch/acc/acc_watch_feature_extractor.py
+  ```
+- **Process:**
+  1. Select the dataset type (CareWear/GalaxyPPG).
+  2. Select the device (e.g., Galaxy Watch).
+  3. Specify overlap percentage (default 50%).
+  4. Select the directory containing raw ACC `.csv` chunks.
+- **Output:** A new folder `extracted_features_[timestamp]` will be created containing files for window sizes (2s, 5s, 10s, 30s, 60s).
+
+#### 2. Extract Heart Rate (HR) Features
+- **Script:** `feature_extraction/smartwatch/hr/hr_watch_feature_extractor.py`
+- **Execution:**
+  ```bash
+  python3 feature_extraction/smartwatch/hr/hr_watch_feature_extractor.py
+  ```
+- **Process:**
+  1. Select the dataset and window size (e.g., 60s).
+  2. Select the directory containing raw HR `.csv` chunks.
+- **Output:** Features saved in `extracted_features/CareWear_ML_features_60s.csv`.
+
+---
+
+### Phase 2: Machine Learning Benchmarking
+Once features are extracted, use the automated runners to benchmark model performance.
+
+#### 1. Traditional ML Benchmarking (Automated)
+- **Script:** `machine_learning/run_stratified_5fold_auto.py`
+- **Execution:**
+  ```bash
+  python3 machine_learning/run_stratified_5fold_auto.py
+  ```
+- **Process:**
+  1. **Select Input Folder:** Choose the folder containing the feature CSVs (from Phase 1).
+  2. **Configure Run:** Enter a version name (e.g., `v1`) and select models (RF, XGB, GB, LR, etc.).
+  3. **Auto-Run:** The script will automatically iterate through all feature sets (Time Domain, HRV, Kinematics, etc.) and run a Stratified Group 5-Fold Cross-Validation.
+- **Output:** A `Results_Stratified_5Fold_[Version]` directory containing per-model reports, confusion matrices, and a `master_summary.csv`.
+
+#### 2. Deep Learning Fusion (ACC + HR)
+- **Script:** `machine_learning/dl_run_stratified_5fold_fusion_attention_auto.py`
+- **Execution:**
+  ```bash
+  python3 machine_learning/dl_run_stratified_5fold_fusion_attention_auto.py
+  ```
+- **Process:**
+  1. Specify window size and mode (`Fusion`).
+  2. Select the directories for ACC chunks and HR chunks separately.
+- **Output:** Fold-wise performance metrics, gradient flow plots, and a final deployment-ready model.
+
+---
+
 ## Machine Learning & Deep Learning Pipelines
 
 This repository contains two primary pipelines for stress detection using wearable data: a traditional Machine Learning (ML) benchmarking tool and a Deep Learning (DL) Fusion network.
