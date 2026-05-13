@@ -1,0 +1,20 @@
+adaptation (1)
+baseline (2)
+tsst-prep (3) (Stress) mapp to 0
+tsst-speech (4) (Stress)  mapp to 0
+meditation-1 (5)
+screen-reading (6)
+ssst-prep (7) (Stress) -  mapp to 0
+ssst-sing (8) (Stress) -  mapp to 0
+meditation-2 (9)
+keyboard-typing (10)
+rest-1 (11)
+mobile-typing (12)
+rest-2 (13)
+standing (14)
+rest-3 (15)
+walking (16) (Not-Stress) mapp to 1
+rest-4 (17)
+jogging (18) (Not-Stress) mapp to 1
+rest-5 (19) ()
+running (20) (Not-Stress) mapp to 1
